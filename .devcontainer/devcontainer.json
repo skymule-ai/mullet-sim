@@ -1,0 +1,17 @@
+{
+  "name": "mullet_sitl_sim",
+  "dockerComposeFile": "./docker-compose.yml",
+  "service": "dev",
+  "workspaceFolder": "/ws",
+  "shutdownAction": "stopCompose",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "ms-python.python",
+        "foxundermoon.shell-format"
+      ]
+    }
+  }
+}

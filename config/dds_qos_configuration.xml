@@ -1,0 +1,39 @@
+<profiles>
+  <participant profile_name="default_participant_profile" is_default="true">
+    <rtps>
+      <builtin>
+        <domainId>0</domainId>
+      </builtin>
+    </rtps>
+  </participant>
+
+  <publisher profile_name="default_publisher_profile" is_default="false">
+    <qos>
+      <reliability>
+        <kind>BEST_EFFORT</kind>
+      </reliability>
+      <durability>
+        <kind>VOLATILE</kind>
+      </durability>
+      <history>
+        <kind>KEEP_LAST</kind>
+        <depth>0</depth>
+      </history>
+    </qos>
+  </publisher>
+
+  <subscriber profile_name="default_subscriber_profile" is_default="false">
+    <qos>
+      <reliability>
+        <kind>BEST_EFFORT</kind>
+      </reliability>
+      <durability>
+        <kind>VOLATILE</kind>
+      </durability>
+      <history>
+        <kind>KEEP_LAST</kind>
+        <depth>0</depth>
+      </history>
+    </qos>
+  </subscriber>
+</profiles>

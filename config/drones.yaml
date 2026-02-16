@@ -1,0 +1,41 @@
+simulation:
+  # Gazebo world name (PX4_GZ_WORLD). Example: default, windy, moving_platform
+  world: default
+
+  # Run Gazebo without GUI (set HEADLESS=1 in PX4 env). Recommended for CI.
+  headless: false
+
+  # ROS 2 DDS domain id. External ROS 2 containers must use same domain.
+  ros_domain_id: 0
+
+  # uXRCE-DDS agent transport/port. PX4 clients will connect to this agent.
+  xrce_agent:
+    transport: udp4
+    port: 8888
+
+# Fleet definition.
+# - instance must be unique per vehicle.
+# - px4_sys_autostart is the PX4 airframe autostart id.
+# - px4_sim_model is the Gazebo model to spawn (PX4_SIM_MODEL), e.g. gz_x500.
+# - pose uses PX4_GZ_MODEL_POSE syntax: x,y,z,roll,pitch,yaw (meters, radians).
+fleet:
+  # Start at instance 0 (PX4/Gazebo SITL default). This avoids a few
+  # multi-instance edge cases where starting at 1 can confuse tooling.
+  - id: 1
+    instance: 1
+    px4_sys_autostart: 4004
+    px4_sim_model: gz_standard_vtol
+    pose: [0.0, 0.0, 0.1, 0.0, 0.0, 0.0]
+
+  - id: 2
+    instance: 2
+    px4_sys_autostart: 4004
+    px4_sim_model: gz_standard_vtol
+    pose: [3.0, 0.0, 0.1, 0.0, 0.0, 0.0]
+
+  # Enable more vehicles once the first x500 is stable.
+  - id: 3
+    instance: 3
+    px4_sys_autostart: 4004
+    px4_sim_model: gz_standard_vtol
+    pose: [0.0, 3.0, 0.1, 0.0, 0.0, 0.0]

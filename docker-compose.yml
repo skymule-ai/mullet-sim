@@ -1,0 +1,54 @@
+services:
+  px4_sitl:
+    image: ghcr.io/skymule-ai/px4-sitl:v1.16.1
+    container_name: mullet_px4_sitl
+    privileged: true
+    shm_size: "2g"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_DISABLE_REQUIRE=1
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      - CONFIG_FILE=/workspace/config/drones.yaml
+      - WORKSPACE_DIR=/workspace
+      - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
+      # Uncomment if you have rendering issues in Gazebo
+      # - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-ogre}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./config:/workspace/config:ro
+      - ./scripts:/workspace/scripts:ro
+      # NVIDIA libs (EGL, GLX) are injected automatically by
+      # nvidia-container-toolkit >= 1.14. Only the Vulkan ICD needs
+      # an explicit mount since the container image lacks it.
+      - /usr/share/vulkan/icd.d/nvidia_icd.json:/usr/share/vulkan/icd.d/nvidia_icd.json:ro
+    tmpfs:
+      - /workspace/.runtime:uid=1000,gid=1000,mode=1777
+    working_dir: /workspace
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    entrypoint: ["/usr/bin/env", "bash", "/workspace/scripts/entrypoint.sh"]
+    
+    # Host networking is the most reliable way to make QGroundControl work
+    # with PX4 SITL in Docker, because PX4's default MAVLink config is bound
+    # to localhost for SITL.
+    #
+    # With host networking:
+    # - QGC auto-connect works (PX4 sends to 127.0.0.1:14550).
+    # - No explicit UDP port publishing is needed.
+    network_mode: host

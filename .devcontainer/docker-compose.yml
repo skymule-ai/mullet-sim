@@ -1,0 +1,13 @@
+services:
+  dev:
+    image: ghcr.io/skymule-ai/px4-sitl:v1.16.1
+    privileged: true
+    stdin_open: true
+    tty: true
+    working_dir: /ws
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ../:/ws
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
