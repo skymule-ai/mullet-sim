@@ -43,6 +43,12 @@ cp .env.example .env
 
 - `config/drones.yaml`
 
+Container paths:
+- `./config` -> `/config`
+- `./scripts` -> `/scripts`
+- `./src` -> `/ws/src`
+- Runtime logs -> `/tmp/runtime`
+
 3) Run:
 
 ```sh
@@ -55,11 +61,20 @@ Stop:
 ./stop.sh
 ```
 
+## Custom code
+To add custom code (e.g. ROS 2 nodes, Gazebo plugins, etc.):
+1) Add your code to `src/` (or mount an external volume).
+2) Clone the following repo to `src/` to get PX4 messages:
+```sh
+git clone https://github.com/PX4/px4_msgs.git
+git clone https://github.com/PX4/px4_ros_com.git
+```
+
 ## Configuration
 
 Fleet config is `config/drones.yaml`.
 
-- `simulation.world` sets `PX4_GZ_WORLD` (e.g. `default`, `windy`).
+- `simulation.world` sets `PX4_GZ_WORLD` (e.g. `default`, `windy`, `moving_platform`, `baylands`).
 - `simulation.headless: true` sets `HEADLESS=1` for PX4 (no Gazebo GUI).
 - `fleet[].instance` must be unique.
 - `fleet[].px4_sys_autostart` is the PX4 airframe autostart id.

@@ -1,0 +1,4 @@
+desired_takeoff_altitude: 5.0
+hold_mode_duration: 10.0
+landing_altitude: 0.5
+mode_switch_delay: 2.0

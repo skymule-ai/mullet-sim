@@ -20,12 +20,21 @@ docker compose up -d
 
 SESSION_NAME="mullet_sitl"
 CONTAINER_NAME="mullet_px4_sitl"
+TMUX_CONF_IN_CONTAINER="/config/tmux.conf"
+RUNTIME_DIR_IN_CONTAINER="/tmp/runtime"
 
-if [[ -f "${TMUX_CONF_PATH}" ]]; then
-  tmux source-file "${TMUX_CONF_PATH}" >/dev/null 2>&1 || true
+if ! docker exec "${CONTAINER_NAME}" tmux -V >/dev/null 2>&1; then
+  echo "tmux not found in container ${CONTAINER_NAME}" >&2
+  exit 1
 fi
 
-tmux has-session -t "${SESSION_NAME}" 2>/dev/null && tmux kill-session -t "${SESSION_NAME}"
+docker exec "${CONTAINER_NAME}" tmux kill-server >/dev/null 2>&1 || true
+
+tmux_base_cmd=(docker exec "${CONTAINER_NAME}" tmux)
+tmux_start_cmd=("${tmux_base_cmd[@]}")
+if [[ -f "${TMUX_CONF_PATH}" ]]; then
+  tmux_start_cmd=("${tmux_base_cmd[@]}" -f "${TMUX_CONF_IN_CONTAINER}")
+fi
 
 if [[ ! -f "${CONFIG_PATH}" ]]; then
   echo "Config file not found: ${CONFIG_PATH}" >&2
@@ -44,25 +53,24 @@ fi
 first_inst="${INSTANCES[0]}"
 
 # Window "px4": PX4 logs (one pane per instance)
-tmux new-session -d -s "${SESSION_NAME}" -n "px4" \
-  "bash -lc 'sleep 2; docker exec ${CONTAINER_NAME} bash -lc \"tail -n 200 -F /workspace/.runtime/px4_${first_inst}.log\"'"
+"${tmux_start_cmd[@]}" new-session -d -s "${SESSION_NAME}" -n "px4" \
+  "bash -lc 'sleep 2; tail -n 200 -F ${RUNTIME_DIR_IN_CONTAINER}/px4_${first_inst}.log'"
 
 for inst in "${INSTANCES[@]:1}"; do
-  tmux split-window -t "${SESSION_NAME}:px4" \
-    "bash -lc 'sleep 2; docker exec ${CONTAINER_NAME} bash -lc \"tail -n 200 -F /workspace/.runtime/px4_${inst}.log\"'"
-  tmux select-layout -t "${SESSION_NAME}:px4" tiled
+  "${tmux_base_cmd[@]}" split-window -t "${SESSION_NAME}:px4" \
+    "bash -lc 'sleep 2; tail -n 200 -F ${RUNTIME_DIR_IN_CONTAINER}/px4_${inst}.log'"
+  "${tmux_base_cmd[@]}" select-layout -t "${SESSION_NAME}:px4" tiled
 done
 
 # Window "xrce": MicroXRCEAgent log
-tmux new-window -d -t "${SESSION_NAME}" -n "xrce" \
-  "bash -lc 'sleep 2; docker exec ${CONTAINER_NAME} bash -lc \"tail -n 200 -F /workspace/.runtime/xrce_agent.log\"'"
+"${tmux_base_cmd[@]}" new-window -d -t "${SESSION_NAME}" -n "xrce" \
+  "bash -lc 'sleep 2; tail -n 200 -F ${RUNTIME_DIR_IN_CONTAINER}/xrce_agent.log'"
 
 # Window "shell": interactive shell inside container
-tmux new-window -d -t "${SESSION_NAME}" -n "shell" \
-  "bash -lc 'docker exec -it ${CONTAINER_NAME} bash'"
+"${tmux_base_cmd[@]}" new-window -d -t "${SESSION_NAME}" -n "shell" bash
 
-tmux select-window -t "${SESSION_NAME}:px4" || true
+"${tmux_base_cmd[@]}" select-window -t "${SESSION_NAME}:px4" || true
 
-tmux attach -t "${SESSION_NAME}"
+docker exec -it "${CONTAINER_NAME}" tmux attach -t "${SESSION_NAME}"
 
 docker compose down

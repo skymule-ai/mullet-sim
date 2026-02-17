@@ -17,22 +17,24 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
-      - CONFIG_FILE=/workspace/config/drones.yaml
-      - WORKSPACE_DIR=/workspace
+      - CONFIG_FILE=/config/drones.yaml
+      - WORKSPACE_DIR=/ws
+      - MULLET_RUNTIME_DIR=/tmp/runtime
       - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
       # Uncomment if you have rendering issues in Gazebo
       # - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-ogre}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ./config:/workspace/config:ro
-      - ./scripts:/workspace/scripts:ro
+      - ./config:/config:ro
+      - ./scripts:/scripts:ro
+      - ./ws:/ws:rw
       # NVIDIA libs (EGL, GLX) are injected automatically by
       # nvidia-container-toolkit >= 1.14. Only the Vulkan ICD needs
       # an explicit mount since the container image lacks it.
       - /usr/share/vulkan/icd.d/nvidia_icd.json:/usr/share/vulkan/icd.d/nvidia_icd.json:ro
     tmpfs:
-      - /workspace/.runtime:uid=1000,gid=1000,mode=1777
-    working_dir: /workspace
+      - /tmp/runtime:uid=1000,gid=1000,mode=1777
+    working_dir: /ws
     deploy:
       resources:
         limits:
@@ -42,7 +44,7 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    entrypoint: ["/usr/bin/env", "bash", "/workspace/scripts/entrypoint.sh"]
+    entrypoint: ["/usr/bin/env", "bash", "/scripts/entrypoint.sh"]
     
     # Host networking is the most reliable way to make QGroundControl work
     # with PX4 SITL in Docker, because PX4's default MAVLink config is bound
@@ -52,3 +54,38 @@ services:
     # - QGC auto-connect works (PX4 sends to 127.0.0.1:14550).
     # - No explicit UDP port publishing is needed.
     network_mode: host
+
+  px4_no_sitl:
+    image: ghcr.io/skymule-ai/px4-sitl:v1.16.1
+    container_name: mullet_px4_no_sitl
+    privileged: true
+    shm_size: "2g"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      - CONFIG_FILE=/config/drones.yaml
+      - WORKSPACE_DIR=/ws
+      - MULLET_RUNTIME_DIR=/tmp/runtime
+      - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
+    volumes:
+      - ./config:/config:ro
+      - ./scripts:/scripts:ro
+      - ./ws:/ws:rw
+    tmpfs:
+      - /tmp/runtime:uid=1000,gid=1000,mode=1777
+    working_dir: /ws
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    network_mode: host
+    command: ["/bin/bash", "-c", "grep -qxF 'source /scripts/sourcefile.sh' ~/.bashrc || echo 'source /scripts/sourcefile.sh' >> ~/.bashrc; echo 'PX4_NO_SITL container running. This container is meant for running custom code that connects to the PX4_SITL container. To run PX4 SITL, start the px4_sitl service.'; tail -f /dev/null"]

@@ -179,7 +179,7 @@ def main() -> int:
     # (Agent honors this only when clients use the reserved domain id 255.)
     env_base.setdefault("XRCE_DOMAIN_ID_OVERRIDE", str(ros_domain_id))
 
-    runtime_dir = os.environ.get("MULLET_RUNTIME_DIR", "/workspace/.runtime")
+    runtime_dir = os.environ.get("MULLET_RUNTIME_DIR", "/tmp/runtime")
     os.makedirs(runtime_dir, exist_ok=True)
     print(f"[mullet] runtime dir: {runtime_dir}", flush=True)
 

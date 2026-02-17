@@ -8,9 +8,19 @@
     "vscode": {
       "extensions": [
         "ms-azuretools.vscode-docker",
-        "redhat.vscode-yaml",
-        "ms-python.python",
-        "foxundermoon.shell-format"
+				"ms-iot.vscode-ros",
+				"ms-python.python",
+				"ms-vscode.cpptools",
+				"ms-vscode.cpptools-extension-pack",
+				"ms-vscode-remote.vscode-remote-extensionpack",
+				"althack.ament-task-provider",
+				"betwo.b2-catkin-tools",
+				"DotJoshJohnson.xml",
+				"redhat.vscode-yaml",
+				"smilerobotics.urdf",
+				"streetsidesoftware.code-spell-checker",
+				"yzhang.markdown-all-in-one",
+				"foxundermoon.shell-format"
       ]
     }
   }

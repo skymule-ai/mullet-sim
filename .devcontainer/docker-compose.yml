@@ -1,13 +1,35 @@
 services:
   dev:
     image: ghcr.io/skymule-ai/px4-sitl:v1.16.1
+    container_name: mullet_devcontainer
     privileged: true
+    shm_size: "2g"
     stdin_open: true
     tty: true
-    working_dir: /ws
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ../:/ws
+    restart: unless-stopped
+
     environment:
-      - DISPLAY=${DISPLAY}
-      - QT_X11_NO_MITSHM=1
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      - CONFIG_FILE=/config/drones.yaml
+      - WORKSPACE_DIR=/ws
+      - MULLET_RUNTIME_DIR=/tmp/runtime
+      - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
+    volumes:
+      - ../config:/config:ro
+      - ../scripts:/scripts:ro
+      - ../ws:/ws:rw
+    tmpfs:
+      - /tmp/runtime:uid=1000,gid=1000,mode=1777
+    working_dir: /ws
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    network_mode: host
+    command: ["/bin/bash", "-c", "grep -qxF 'source /scripts/sourcefile.sh' ~/.bashrc || echo 'source /scripts/sourcefile.sh' >> ~/.bashrc; echo 'PX4_NO_SITL container running. This container is meant for running custom code that connects to the PX4_SITL container. To run PX4 SITL, start the px4_sitl service.'; tail -f /dev/null"]
