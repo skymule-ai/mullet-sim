@@ -27,15 +27,15 @@ fleet:
     px4_sim_model: gz_standard_vtol
     pose: [0.0, 0.0, 0.1, 0.0, 0.0, 0.0]
 
-  - id: 2
-    instance: 2
-    px4_sys_autostart: 4004
-    px4_sim_model: gz_standard_vtol
-    pose: [3.0, 0.0, 0.1, 0.0, 0.0, 0.0]
+  # - id: 2
+  #   instance: 2
+  #   px4_sys_autostart: 4004
+  #   px4_sim_model: gz_standard_vtol
+  #   pose: [3.0, 0.0, 0.1, 0.0, 0.0, 0.0]
 
-  # Enable more vehicles once the first x500 is stable.
-  - id: 3
-    instance: 3
-    px4_sys_autostart: 4004
-    px4_sim_model: gz_standard_vtol
-    pose: [0.0, 3.0, 0.1, 0.0, 0.0, 0.0]
+  # # Enable more vehicles once the first x500 is stable.
+  # - id: 3
+  #   instance: 3
+  #   px4_sys_autostart: 4004
+  #   px4_sim_model: gz_standard_vtol
+  #   pose: [0.0, 3.0, 0.1, 0.0, 0.0, 0.0]

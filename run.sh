@@ -5,6 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${script_dir}"
 
 CONFIG_PATH="${CONFIG_PATH:-config/drones.yaml}"
+TMUX_CONF_PATH="${TMUX_CONF_PATH:-config/tmux.conf}"
 
 # Allow Gazebo GUI from container.
 if command -v xhost >/dev/null 2>&1; then
@@ -19,6 +20,10 @@ docker compose up -d
 
 SESSION_NAME="mullet_sitl"
 CONTAINER_NAME="mullet_px4_sitl"
+
+if [[ -f "${TMUX_CONF_PATH}" ]]; then
+  tmux source-file "${TMUX_CONF_PATH}" >/dev/null 2>&1 || true
+fi
 
 tmux has-session -t "${SESSION_NAME}" 2>/dev/null && tmux kill-session -t "${SESSION_NAME}"
 

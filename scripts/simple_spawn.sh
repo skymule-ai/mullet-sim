@@ -5,6 +5,7 @@ NUM=$1
 MODEL_NAME=${2:-x500}
 PX4_DIR="${PX4_DIR:-~/PX4-Autopilot}"
 MODEL="gz_${MODEL_NAME}"
+TMUX_CONF_PATH="${TMUX_CONF_PATH:-config/tmux.conf}"
 
 if [ -z "$NUM" ]; then
     echo "Usage: $0 <number_of_robots>"
@@ -15,6 +16,10 @@ echo "Number of robots: $NUM"
 echo "Selected model: $MODEL"
 
 SESSION="robots"
+
+if [ -f "$TMUX_CONF_PATH" ]; then
+    tmux source-file "$TMUX_CONF_PATH" >/dev/null 2>&1 || true
+fi
 
 # Kill session if it already exists
 tmux has-session -t $SESSION 2>/dev/null
