@@ -75,11 +75,13 @@ git clone https://github.com/PX4/px4_ros_com.git
 Fleet config is `config/drones.yaml`.
 
 - `simulation.world` sets `PX4_GZ_WORLD` (e.g. `default`, `windy`, `moving_platform`, `baylands`).
+- `simulation.gz_ip` sets `GZ_IP` (Gazebo transport IP). Default is `127.0.0.1`, matching `make px4_sitl ...`.
 - `simulation.headless: true` sets `HEADLESS=1` for PX4 (no Gazebo GUI).
-- `fleet[].instance` must be unique.
+- `fleet[].instance` must be unique, must start at `0`, and must be contiguous (`0,1,2,...`).
 - `fleet[].px4_sys_autostart` is the PX4 airframe autostart id.
 - `fleet[].px4_sim_model` is the Gazebo model name (PX4 uses `PX4_SIM_MODEL`). Example: `gz_x500`.
 - `fleet[].pose` maps to `PX4_GZ_MODEL_POSE` (`x,y,z,roll,pitch,yaw` in meters/radians).
+- For known PX4 SITL vehicles, `px4_sys_autostart` and `px4_sim_model` must match their standard pair (launcher validates this and fails fast on mismatch).
 
 ## Supported Vehicle Models
 
@@ -139,9 +141,27 @@ The simulation supports multiple worlds. Specify a world using the `simulation.w
 
 ### Example Configuration
 
+Single VTOL baseline (matches `make px4_sitl gz_standard_vtol` behavior):
+
+```yaml
+simulation:
+  world: default
+  gz_ip: 127.0.0.1
+  headless: false
+
+fleet:
+  - instance: 0
+    px4_sys_autostart: 4004
+    px4_sim_model: gz_standard_vtol
+    pose: [0, 0, 0.1, 0, 0, 0]
+```
+
+Multi-vehicle example:
+
 ```yaml
 simulation:
   world: windy
+  gz_ip: 127.0.0.1
   headless: false
 
 fleet:

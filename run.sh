@@ -16,7 +16,7 @@ if [[ ! -f .env ]]; then
   cp .env.example .env
 fi
 
-docker compose up -d
+docker compose up -d px4_sitl
 
 SESSION_NAME="mullet_sitl"
 CONTAINER_NAME="mullet_px4_sitl"

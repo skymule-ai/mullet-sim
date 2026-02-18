@@ -1,44 +1,62 @@
 #ifndef DRONE_STATE_MACHINE_HPP
 #define DRONE_STATE_MACHINE_HPP
 
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <string>
+
 #include <rclcpp/rclcpp.hpp>
-// #include "px4_interface.hpp"
+#include <rclcpp_action/rclcpp_action.hpp>
+
+#include "px4_state_machine/action/flight_command.hpp"
+#include "px4_state_machine/msg/state.hpp"
 
 class DroneStateMachine : public rclcpp::Node
 {
 public:
-    DroneStateMachine() : Node("drone_state_machine"), current_state_(State::IDLE) {
-        this->declare_parameter<int>("drone_id", 1);
-        this->get_parameter("drone_id", drone_id_);
-    }
+    DroneStateMachine();
 
-    void takeOff();
-    void hold();
-    void land();
     void shutdown();
 
 private:
-    enum class State
-    {
-        /*
-        0: IDLE - Waiting for takeoff command
-        1: TAKING_OFF - Executing takeoff procedure
-        2: HOLDING - Maintaining position
-        3: LANDING - Executing landing procedure
-        4: MISSION - Performing mission tasks (e.g., waypoint navigation)
-        */
-        IDLE,
-        TAKING_OFF,
-        HOLDING,
-        LANDING,
-        MISSION
-    };
+    using StateMsg = px4_state_machine::msg::State;
+    using FlightCommand = px4_state_machine::action::FlightCommand;
+    using GoalHandleFlightCommand = rclcpp_action::ServerGoalHandle<FlightCommand>;
+
+    void stateCallback(const StateMsg::SharedPtr msg);
+    void executeState();
+
+    rclcpp_action::GoalResponse handleGoal(
+        const rclcpp_action::GoalUUID & uuid,
+        std::shared_ptr<const FlightCommand::Goal> goal);
+    rclcpp_action::CancelResponse handleCancel(
+        const std::shared_ptr<GoalHandleFlightCommand> goal_handle);
+    void handleAccepted(const std::shared_ptr<GoalHandleFlightCommand> goal_handle);
+    void executeGoal(const std::shared_ptr<GoalHandleFlightCommand> goal_handle);
+
+    bool handleCommand(uint8_t command, float takeoff_altitude, std::string & message);
+    bool commandAllowed(uint8_t command, std::string & reason) const;
+
+    bool takeOff(float altitude, std::string & message);
+
+    void setState(uint8_t new_state);
+    uint8_t getState() const;
+    void publishState();
 
     int drone_id_;
+    float default_takeoff_altitude_;
 
-    State current_state_;
+    mutable std::mutex state_mutex_;
+    std::mutex command_mutex_;
+    uint8_t current_state_;
+    bool command_in_progress_;
 
-    void transitionTo(State new_state);
+    rclcpp::Publisher<StateMsg>::SharedPtr state_publisher_;
+    rclcpp::Subscription<StateMsg>::SharedPtr state_subscriber_;
+    rclcpp::TimerBase::SharedPtr timer_;
+
+    rclcpp_action::Server<FlightCommand>::SharedPtr action_server_;
 };
 
 #endif // DRONE_STATE_MACHINE_HPP

@@ -7,6 +7,28 @@ import subprocess
 import sys
 import time
 
+# Known PX4 SITL autostart/model pairs used by this launcher.
+# Validation enforces consistency for these well-known pairs while still
+# allowing custom IDs/models that are not in this map.
+KNOWN_AUTOSTART_TO_MODEL = {
+    4001: "gz_x500",
+    4002: "gz_x500_depth",
+    4003: "gz_rc_cessna",
+    4004: "gz_standard_vtol",
+    4005: "gz_x500_vision",
+    4008: "gz_advanced_plane",
+    4013: "gz_x500_lidar_2d",
+    4016: "gz_x500_lidar_down",
+    4017: "gz_x500_lidar_front",
+    4018: "gz_quadtailsitter",
+    4019: "gz_x500_gimbal",
+    4020: "gz_tiltrotor",
+    50000: "gz_rover_differential",
+    51000: "gz_rover_ackermann",
+    52000: "gz_rover_mecanum",
+}
+KNOWN_MODEL_TO_AUTOSTART = {v: k for k, v in KNOWN_AUTOSTART_TO_MODEL.items()}
+
 
 def _err(msg: str) -> None:
     print(msg, file=sys.stderr)
@@ -139,6 +161,87 @@ def _format_pose(pose_list):
     return ",".join(str(float(v)) for v in vals)
 
 
+def _validate_fleet(fleet) -> bool:
+    if not fleet:
+        _err("No vehicles defined under 'fleet' in config")
+        return False
+
+    errors = []
+    instances = []
+
+    for idx, vehicle in enumerate(fleet):
+        label = f"fleet[{idx}]"
+
+        if "instance" not in vehicle:
+            errors.append(f"{label}: missing required field 'instance'")
+            continue
+
+        try:
+            inst = int(vehicle["instance"])
+        except Exception:
+            errors.append(f"{label}: invalid instance value {vehicle.get('instance')!r}")
+            continue
+
+        instances.append(inst)
+
+        if "px4_sys_autostart" not in vehicle:
+            errors.append(f"{label} (instance {inst}): missing 'px4_sys_autostart'")
+            continue
+        if "px4_sim_model" not in vehicle:
+            errors.append(f"{label} (instance {inst}): missing 'px4_sim_model'")
+            continue
+
+        try:
+            sys_autostart = int(vehicle["px4_sys_autostart"])
+        except Exception:
+            errors.append(
+                f"{label} (instance {inst}): invalid px4_sys_autostart value {vehicle.get('px4_sys_autostart')!r}"
+            )
+            continue
+
+        sim_model = str(vehicle["px4_sim_model"]).strip()
+        if not sim_model:
+            errors.append(f"{label} (instance {inst}): px4_sim_model must not be empty")
+            continue
+
+        expected_model = KNOWN_AUTOSTART_TO_MODEL.get(sys_autostart)
+        if expected_model and sim_model != expected_model:
+            errors.append(
+                f"{label} (instance {inst}): autostart {sys_autostart} expects model '{expected_model}', got '{sim_model}'"
+            )
+            continue
+
+        expected_autostart = KNOWN_MODEL_TO_AUTOSTART.get(sim_model)
+        if expected_autostart and sys_autostart != expected_autostart:
+            errors.append(
+                f"{label} (instance {inst}): model '{sim_model}' expects autostart {expected_autostart}, got {sys_autostart}"
+            )
+
+    if instances:
+        if len(set(instances)) != len(instances):
+            errors.append(
+                f"fleet instances must be unique, got: {sorted(instances)}"
+            )
+        else:
+            sorted_instances = sorted(instances)
+            if sorted_instances[0] != 0:
+                errors.append(
+                    f"fleet must start at instance 0, got min instance {sorted_instances[0]}"
+                )
+            expected_instances = list(range(len(sorted_instances)))
+            if sorted_instances != expected_instances:
+                errors.append(
+                    f"fleet instances must be contiguous from 0, expected {expected_instances}, got {sorted_instances}"
+                )
+
+    if errors:
+        for message in errors:
+            _err(f"Config error: {message}")
+        return False
+
+    return True
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
@@ -148,22 +251,12 @@ def main() -> int:
     sim = cfg.get("simulation", {})
     fleet = cfg.get("fleet", [])
 
-    if not fleet:
-        _err("No vehicles defined under 'fleet' in config")
-        return 2
-
-    instances = []
-    for v in fleet:
-        if "instance" not in v:
-            _err(f"Vehicle missing 'instance': {v}")
-            return 2
-        instances.append(int(v["instance"]))
-    if len(set(instances)) != len(instances):
-        _err("All fleet.instance values must be unique")
+    if not _validate_fleet(fleet):
         return 2
 
     world = sim.get("world", "default")
     headless = bool(sim.get("headless", False))
+    config_gz_ip = str(sim.get("gz_ip", "127.0.0.1")).strip()
     ros_domain_id = int(
         sim.get("ros_domain_id", int(os.environ.get("ROS_DOMAIN_ID", "0")))
     )
@@ -174,6 +267,9 @@ def main() -> int:
 
     env_base = os.environ.copy()
     env_base["ROS_DOMAIN_ID"] = str(ros_domain_id)
+    # Align with the default make flow, which exports GZ_IP=127.0.0.1.
+    # Precedence: existing env var > config value > launcher default.
+    env_base["GZ_IP"] = os.environ.get("GZ_IP", config_gz_ip or "127.0.0.1")
 
     # If the Agent supports domain override, keep DDS aligned to ROS_DOMAIN_ID.
     # (Agent honors this only when clients use the reserved domain id 255.)
@@ -182,6 +278,7 @@ def main() -> int:
     runtime_dir = os.environ.get("MULLET_RUNTIME_DIR", "/tmp/runtime")
     os.makedirs(runtime_dir, exist_ok=True)
     print(f"[mullet] runtime dir: {runtime_dir}", flush=True)
+    print(f"[mullet] GZ_IP={env_base['GZ_IP']}", flush=True)
 
     # Start Micro XRCE agent (single agent for all PX4 instances)
     agent_cmd = ["MicroXRCEAgent", agent_transport, "-p", str(agent_port)]
