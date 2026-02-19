@@ -51,6 +51,8 @@ To run the state machine, use the provided launch file:
 ros2 launch px4_state_machine px4_state_machine.launch.py
 ```
 
+For the Python offboard VTOL node details (topics, commands, parameters, examples), see `README_offboard.md`.
+
 ## Features
 
 - **Takeoff**: The drone can take off to a specified altitude.

@@ -24,8 +24,8 @@ include_directories(include)
 
 # Source files
 set(SOURCES
-    src/drone_state_machine.cpp
-    src/px4_interface.cpp
+    # src/drone_state_machine.cpp
+    # src/px4_interface.cpp
     src/drone_start.cpp
 )
 
@@ -55,10 +55,16 @@ install(TARGETS
 # Python things -------------------------------
 # ament_python_install_package(${PROJECT_NAME})
 
-# install(PROGRAMS
+install(PROGRAMS
+  scripts/offboard.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
-#   DESTINATION lib/${PROJECT_NAME}
-# )
+install(DIRECTORY
+  launch
+  config
+  DESTINATION share/${PROJECT_NAME}
+)
 
 
 ament_package()
