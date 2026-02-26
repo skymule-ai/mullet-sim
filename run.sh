@@ -66,8 +66,19 @@ done
 "${tmux_base_cmd[@]}" new-window -d -t "${SESSION_NAME}" -n "xrce" \
   "bash -lc 'sleep 2; tail -n 200 -F ${RUNTIME_DIR_IN_CONTAINER}/xrce_agent.log'"
 
-# Window "shell": interactive shell inside container
+
+# Window "shell": interactive shell inside container (custom layout)
+# Left: big column, Right: 2 horizontal splits
 "${tmux_base_cmd[@]}" new-window -d -t "${SESSION_NAME}" -n "shell" bash
+# Split right (vertical) for the right column
+"${tmux_base_cmd[@]}" split-window -h -t "${SESSION_NAME}:shell" bash
+# Colcon build the ROS2 workspace in the left column (pane 0)
+"${tmux_base_cmd[@]}" send-keys -t "${SESSION_NAME}:shell.1" \
+  "source /opt/ros/humble/setup.bash && colcon build && clear" Enter
+# Now split the right column (pane 1) horizontally into two
+"${tmux_base_cmd[@]}" split-window -v -t "${SESSION_NAME}:shell.2" bash
+# Select the leftmost pane (robust)
+"${tmux_base_cmd[@]}" select-pane -L -t "${SESSION_NAME}:shell"
 
 "${tmux_base_cmd[@]}" select-window -t "${SESSION_NAME}:px4" || true
 
