@@ -9,7 +9,7 @@ vtol_sm:
     request_mc_topic: "request_mc"
     land_topic: "land_request"
 
-    takeoff_height_m: 30.0
+    takeoff_height_m: 50.0
     hover_yaw_rad: 0.0
     setpoint_rate_hz: 100.0
     offboard_warmup_cycles: 10
@@ -17,15 +17,21 @@ vtol_sm:
     yaw_align_tol_deg: 10.0
     
     fw_heading_deg: 0.0
-    fw_speed_mps: 20.0
-    fw_alt_m: 30.0
-    fw_lookahead_m: 80.0
+    fw_speed_mps: 15.0
+    fw_alt_m: 50.0
+    fw_lookahead_m: 40.0
     fw_min_arsp_gate_mps: 7.0
+    fw_max_yaw_rate_deg_s: 8.0
+    fw_alt_err_kp: 0.8
+    fw_alt_max_vz_mps: 3.0
 
     loiter: true
     loiter_radius_m: 50.0
     loiter_traj_pcount: 120
     loiter_lookahead_m: 25.0
+
+    cmd_timeout_s: 3.0
+    cmd_vel_lookahead_s: 10.0
 
     debug_enabled: true
     debug_topic: "offboard_debug"

@@ -1,0 +1,13 @@
+[project]
+name = "mullet-sitl-sim"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "matplotlib>=3.10.8",
+    "numba>=0.64.0",
+    "numpy>=2.2.6",
+    "pip>=26.0.1",
+    "scikit-learn>=1.7.2",
+]

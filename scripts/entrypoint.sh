@@ -18,4 +18,9 @@ set +u
 source /scripts/sourcefile.sh
 set -u
 
+VENV_DIR="${VENV_DIR:-/ws/venv}"
+export PYTHONPATH="${VENV_DIR}/lib/python3.10/site-packages:${PYTHONPATH:-}"
+
+touch "${VENV_DIR}/COLCON_IGNORE"
+
 exec /scripts/spawn_fleet.py --config "${CONFIG_FILE}"

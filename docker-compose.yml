@@ -21,6 +21,7 @@ services:
       - WORKSPACE_DIR=/ws
       - MULLET_RUNTIME_DIR=/tmp/runtime
       - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
+      - PYTHONPATH=/ws/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages
       # Uncomment if you have rendering issues in Gazebo
       # - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-ogre}
     volumes:
@@ -28,6 +29,7 @@ services:
       - ./config:/config:ro
       - ./scripts:/scripts:ro
       - ./ws:/ws:rw
+      - ./.venv:/ws/venv              # mount the venv explicitly (or covered by above)
       # NVIDIA libs (EGL, GLX) are injected automatically by
       # nvidia-container-toolkit >= 1.14. Only the Vulkan ICD needs
       # an explicit mount since the container image lacks it.
@@ -71,10 +73,12 @@ services:
       - WORKSPACE_DIR=/ws
       - MULLET_RUNTIME_DIR=/tmp/runtime
       - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
+      - PYTHONPATH=/ws/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages
     volumes:
       - ./config:/config:ro
       - ./scripts:/scripts:ro
       - ./ws:/ws:rw
+      - ./.venv:/ws/venv              # mount the venv explicitly (or covered by above)
     tmpfs:
       - /tmp/runtime:uid=1000,gid=1000,mode=1777
     working_dir: /ws

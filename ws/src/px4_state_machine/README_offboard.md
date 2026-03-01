@@ -8,7 +8,7 @@ This node controls a PX4 VTOL with one offboard state machine:
 - Horizontal guidance is pure pursuit toward a lookahead target:
   - straight-line lookahead when `loiter=false`
   - analytic circular lookahead when `loiter=true` and state is `FW_EXECUTE`
-- `FW_SET` updates heading/speed/altitude at runtime.
+- `command_topic` can override FW XY lookahead targets at runtime.
 - FW -> MC transition uses `request_mc_topic`.
 - Landing is triggered by `land_topic`.
 
@@ -63,8 +63,11 @@ From any state:
   - `<fmu_prefix>/fmu/out/airspeed_validated`
 
 ### Control topics
-- `command_topic` (`std_msgs/String`)
-  - `FW_SET HDG=<deg> SPD=<mps> ALT=<m>`
+- `command_topic` (`std_msgs/Float32MultiArray`)
+  - format `[x, y]` or `[x, y, 0]`: absolute XY target point
+  - format `[vx, vy, 1]`: velocity-direction command (normalized internally)
+  - any 3-value command with `type` not in `{0, 1}` is rejected
+  - if no new command arrives for `cmd_timeout_s`, fallback is loiter at current position
 - `request_fw_topic` (`std_msgs/Empty`): MC -> FW request
 - `request_mc_topic` (`std_msgs/Empty`): FW -> MC request
 - `land_topic` (`std_msgs/Empty`): land request
@@ -92,10 +95,14 @@ From any state:
   - `fw_alt_m` (float)
   - `fw_lookahead_m` (float)
   - `fw_min_arsp_gate_mps` (float)
+  - `fw_max_yaw_rate_deg_s` (float, default `25.0`, limits yaw step in FW setpoint publishing)
 - Loiter:
   - `loiter` (bool)
   - `loiter_radius_m` (float)
   - `loiter_lookahead_m` (float, arc-length lookahead on circle)
+- Command override:
+  - `cmd_timeout_s` (float, default `5.0`)
+  - `cmd_vel_lookahead_s` (float, default `1.0`, used for velocity-direction mode)
 - Debug:
   - `debug_enabled` (bool)
   - `debug_topic` (string)
@@ -119,7 +126,15 @@ ros2 topic pub /request_fw std_msgs/msg/Empty "{}"
 ```
 
 ```bash
-ros2 topic pub /command std_msgs/msg/String "{data: 'FW_SET HDG=90 SPD=17 ALT=60'}"
+ros2 topic pub /command std_msgs/msg/Float32MultiArray "{data: [120.0, 60.0]}"
+```
+
+```bash
+ros2 topic pub /command std_msgs/msg/Float32MultiArray "{data: [120.0, 60.0, 0.0]}"
+```
+
+```bash
+ros2 topic pub /command std_msgs/msg/Float32MultiArray "{data: [1.0, 0.0, 1.0]}"
 ```
 
 ```bash

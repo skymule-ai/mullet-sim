@@ -74,7 +74,8 @@ done
 "${tmux_base_cmd[@]}" split-window -h -t "${SESSION_NAME}:shell" bash
 # Colcon build the ROS2 workspace in the left column (pane 0)
 "${tmux_base_cmd[@]}" send-keys -t "${SESSION_NAME}:shell.1" \
-  "source /opt/ros/humble/setup.bash && colcon build && clear" Enter
+  "source /opt/ros/humble/setup.bash && colcon build && clear" Enter \
+  "ros2 launch px4_state_machine px4_state_machine.launch.py" Enter
 # Now split the right column (pane 1) horizontally into two
 "${tmux_base_cmd[@]}" split-window -v -t "${SESSION_NAME}:shell.2" bash
 # Select the leftmost pane (robust)
