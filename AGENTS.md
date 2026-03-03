@@ -23,7 +23,7 @@
 ## Coding Style & Naming Conventions
 - Bash: keep `set -euo pipefail`; prefer small, composable scripts.
 - Python: keep runtime deps stdlib-only unless the container image is updated. `config/drones.yaml` must stay compatible with the minimal parser in `scripts/spawn_fleet.py` (avoid YAML anchors/multiline blocks).
-- Config: keep `fleet[].instance` unique, starting at `0` and contiguous (`0,1,2,...`).
+- Config: keep `fleet[].instance` unique and `>= 0`. Any starting offset is allowed (e.g. `1,2,3`). The launcher sorts instances ascending and the lowest one starts the Gazebo server. Gaps are allowed but discouraged unless intentional.
 - ROS 2: packages live under `ws/src/<package_name>`; keep `package.xml` and `CMakeLists.txt` in sync.
 
 ## Testing Guidelines

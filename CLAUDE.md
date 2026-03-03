@@ -52,7 +52,7 @@ git clone https://github.com/PX4/px4_ros_com.git ws/src/px4_ros_com
 ### Fleet launcher (`scripts/spawn_fleet.py`)
 - Parses `config/drones.yaml` with a stdlib-only YAML parser (no PyYAML—container doesn't have it). **Avoid YAML anchors and multi-line blocks in drones.yaml.**
 - Validates autostart/model pairs using `KNOWN_AUTOSTART_TO_MODEL` and fails fast on mismatch.
-- Starts `MicroXRCEAgent` first, then PX4 instances in order with a 0.8 s stagger. Instance 0 starts Gazebo; instances 1+ set `PX4_GZ_STANDALONE=1`.
+- Starts `MicroXRCEAgent` first, then PX4 instances in ascending instance order with a 0.8 s stagger. The **lowest** instance starts Gazebo; all others set `PX4_GZ_STANDALONE=1`.
 - Logs per-instance to `/tmp/runtime/px4_<N>.log` and `/tmp/runtime/xrce_agent.log`.
 
 ### ROS 2 workspace (`ws/src/`)
@@ -76,7 +76,7 @@ Sources ROS 2 and `/ws/install/setup.bash` in every shell. Appended to `~/.bashr
 
 ## Configuration Rules
 
-- `config/drones.yaml`: fleet instances must be **unique, start at 0, and be contiguous**. Do not add YAML anchors or multi-line blocks (custom parser limitation).
+- `config/drones.yaml`: fleet instances must be **unique and >= 0**. Any starting offset is allowed (e.g. `1,2,3`). Gaps are allowed (a warning is printed). Instances starting at `1` give `/px4_1/...` prefixes for every vehicle, which is recommended for multi-robot ROS 2. Do not add YAML anchors or multi-line blocks (custom parser limitation).
 - `fmu_prefix` in `offboard_params.yaml`: for multi-vehicle, set to `/px4_<N>` to match uXRCE topic namespacing.
 - `simulation.gz_ip`: use `127.0.0.1` for single-container setup (matches PX4's default `make px4_sitl` behavior).
 

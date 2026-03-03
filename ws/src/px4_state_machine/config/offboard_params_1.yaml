@@ -1,8 +1,8 @@
-vtol_sm:
+/**:
   ros__parameters:
-    fmu_prefix: ""
-    target_system: 1
-    target_component: 1
+    # instance must match the PX4 instance number declared in drones.yaml.
+    # fmu_prefix (/px4_1) and target_system (2) are derived automatically.
+    instance: 1
 
     command_topic: "command"
     request_fw_topic: "request_fw"
@@ -15,13 +15,13 @@ vtol_sm:
     offboard_warmup_cycles: 10
     takeoff_reached_tol_m: 0.05
     yaw_align_tol_deg: 10.0
-    
+
     fw_heading_deg: 0.0
     fw_speed_mps: 15.0
-    fw_alt_m: 50.0
+    fw_alt_m: -1
     fw_lookahead_m: 40.0
     fw_min_arsp_gate_mps: 7.0
-    fw_max_yaw_rate_deg_s: 8.0
+    fw_max_yaw_rate_deg_s: 10.0
     fw_alt_err_kp: 0.8
     fw_alt_max_vz_mps: 3.0
 

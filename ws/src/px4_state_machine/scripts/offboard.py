@@ -39,21 +39,21 @@ from px4_msgs.msg import (
 # State machine
 # ---------------------------------------------------------------------------
 
+
 class FlightState(IntEnum):
-    WARMUP_SETPOINTS      = 0
-    REQUEST_OFFBOARD_ARM  = 1
-    MC_TAKEOFF            = 2
-    MC_HOVER              = 3
-    ALIGN_YAW_FOR_FW      = 4   # hold position, rotate yaw to FW heading
-    PRE_TRANSITION_ACCEL  = 5   # accelerate forward in MC until airspeed gate met
+    WARMUP_SETPOINTS = 0
+    REQUEST_OFFBOARD_ARM = 1
+    MC_TAKEOFF = 2
+    MC_HOVER = 3
+    ALIGN_YAW_FOR_FW = 4  # hold position, rotate yaw to FW heading
+    PRE_TRANSITION_ACCEL = 5  # accelerate forward in MC until airspeed gate met
     AWAITING_FW_TRANSITION = 6  # cmd sent once, MC hover hold, wait for vtol=FW
-    FW_EXECUTE            = 7   # pure FW straight-line cruise
-    REQUEST_VTOL_MC       = 8   # back-transition: keep FW setpoint until vtol=MC
-    LANDING               = 9
+    FW_EXECUTE = 7  # pure FW straight-line cruise
+    REQUEST_VTOL_MC = 8  # back-transition: keep FW setpoint until vtol=MC
+    LANDING = 9
 
 
 class VtolStateMachine(Node):
-
     # -----------------------------------------------------------------------
     # Construction
     # -----------------------------------------------------------------------
@@ -62,47 +62,84 @@ class VtolStateMachine(Node):
         super().__init__("vtol_sm")
 
         # ---- ROS parameters -----------------------------------------------
-        self.fmu_prefix = self.declare_parameter("fmu_prefix", "").value
-        self.target_system = int(self.declare_parameter("target_system", 1).value)
-        self.target_component = int(self.declare_parameter("target_component", 1).value)
+        # ``instance`` must match the PX4 instance number in drones.yaml.
+        # fmu_prefix and target_system are derived from it automatically:
+        #   instance 0  →  fmu_prefix=""  target_system=1
+        #   instance N  →  fmu_prefix="/px4_N"  target_system=N+1
+        instance = int(self.declare_parameter("instance", 0).value)
+        self.fmu_prefix = "" if instance == 0 else f"/px4_{instance}"
+        self.target_system = instance + 1
+        self.target_component = 1
 
         # Topics
-        self.command_topic = str(self.declare_parameter("command_topic", "command").value)
-        self.request_fw_topic = str(self.declare_parameter("request_fw_topic", "request_fw").value)
-        self.request_mc_topic = str(self.declare_parameter("request_mc_topic", "request_mc").value)
-        self.land_topic = str(self.declare_parameter("land_topic", "land_request").value)
+        self.command_topic = str(
+            self.declare_parameter("command_topic", "command").value
+        )
+        self.request_fw_topic = str(
+            self.declare_parameter("request_fw_topic", "request_fw").value
+        )
+        self.request_mc_topic = str(
+            self.declare_parameter("request_mc_topic", "request_mc").value
+        )
+        self.land_topic = str(
+            self.declare_parameter("land_topic", "land_request").value
+        )
 
         # MC parameters
-        self.takeoff_height_m = float(self.declare_parameter("takeoff_height_m", 30.0).value)
+        self.takeoff_height_m = float(
+            self.declare_parameter("takeoff_height_m", 30.0).value
+        )
         self.hover_yaw_rad = float(self.declare_parameter("hover_yaw_rad", 0.0).value)
-        self.setpoint_rate_hz = float(self.declare_parameter("setpoint_rate_hz", 20.0).value)
-        self.offboard_warmup_cycles = int(self.declare_parameter("offboard_warmup_cycles", 20).value)
-        self.takeoff_reached_tol_m = float(self.declare_parameter("takeoff_reached_tol_m", 0.5).value)
-        self.yaw_align_tol_deg = float(self.declare_parameter("yaw_align_tol_deg", 10.0).value)
+        self.setpoint_rate_hz = float(
+            self.declare_parameter("setpoint_rate_hz", 20.0).value
+        )
+        self.offboard_warmup_cycles = int(
+            self.declare_parameter("offboard_warmup_cycles", 20).value
+        )
+        self.takeoff_reached_tol_m = float(
+            self.declare_parameter("takeoff_reached_tol_m", 0.5).value
+        )
+        self.yaw_align_tol_deg = float(
+            self.declare_parameter("yaw_align_tol_deg", 10.0).value
+        )
 
         # FW parameters
-        # NOTE: fw_alt_m is independent of takeoff_height_m — never link them.
         self.fw_heading_deg = float(self.declare_parameter("fw_heading_deg", 0.0).value)
         self.fw_speed_mps = float(self.declare_parameter("fw_speed_mps", 15.0).value)
-        self.fw_alt_m = float(self.declare_parameter("fw_alt_m", 30.0).value)
-        self.fw_lookahead_m = float(self.declare_parameter("fw_lookahead_m", 80.0).value)
-        self.fw_min_arsp_gate_mps = float(self.declare_parameter("fw_min_arsp_gate_mps", 0.0).value)
+        # NOTE this can be changes, for the moment in the params fw_alt_m is -1 (not used, assuming level flight).
+        self.fw_alt_m = self.takeoff_height_m
+        self.fw_lookahead_m = float(
+            self.declare_parameter("fw_lookahead_m", 80.0).value
+        )
+        self.fw_min_arsp_gate_mps = float(
+            self.declare_parameter("fw_min_arsp_gate_mps", 0.0).value
+        )
         self.fw_max_yaw_rate_deg_s = float(
             self.declare_parameter("fw_max_yaw_rate_deg_s", 25.0).value
         )
         self.fw_alt_err_kp = float(self.declare_parameter("fw_alt_err_kp", 0.5).value)
-        self.fw_alt_max_vz_mps = float(self.declare_parameter("fw_alt_max_vz_mps", 2.0).value)
+        self.fw_alt_max_vz_mps = float(
+            self.declare_parameter("fw_alt_max_vz_mps", 2.0).value
+        )
 
         # Loitering parameters
         self.loiter = bool(self.declare_parameter("loiter", False).value)
-        self.loiter_radius_m = float(self.declare_parameter("loiter_radius_m", 20.0).value)
-        self.loiter_lookahead_m = float(self.declare_parameter("loiter_lookahead_m", 10.0).value)
+        self.loiter_radius_m = float(
+            self.declare_parameter("loiter_radius_m", 20.0).value
+        )
+        self.loiter_lookahead_m = float(
+            self.declare_parameter("loiter_lookahead_m", 10.0).value
+        )
         self.cmd_timeout_s = float(self.declare_parameter("cmd_timeout_s", 5.0).value)
-        self.cmd_vel_lookahead_s = float(self.declare_parameter("cmd_vel_lookahead_s", 1.0).value)
+        self.cmd_vel_lookahead_s = float(
+            self.declare_parameter("cmd_vel_lookahead_s", 1.0).value
+        )
 
         # Debug
         self.debug_enabled = bool(self.declare_parameter("debug_enabled", False).value)
-        self.debug_topic = str(self.declare_parameter("debug_topic", "offboard_debug").value)
+        self.debug_topic = str(
+            self.declare_parameter("debug_topic", "offboard_debug").value
+        )
 
         # Safety warnings
         if self.takeoff_height_m < 20.0:
@@ -178,17 +215,49 @@ class VtolStateMachine(Node):
         )
 
         # ---- Publishers ---------------------------------------------------
-        self.offboard_mode_pub = self.create_publisher(OffboardControlMode, self._topic("/fmu/in/offboard_control_mode"), px4_qos)
-        self.trajectory_sp_pub = self.create_publisher(TrajectorySetpoint, self._topic("/fmu/in/trajectory_setpoint"), px4_qos)
-        self.vehicle_command_pub = self.create_publisher(VehicleCommand, self._topic("/fmu/in/vehicle_command"), px4_qos)
-        self.debug_pub = self.create_publisher(String, self.debug_topic, 10) if self.debug_enabled else None
+        self.offboard_mode_pub = self.create_publisher(
+            OffboardControlMode, self._topic("/fmu/in/offboard_control_mode"), px4_qos
+        )
+        self.trajectory_sp_pub = self.create_publisher(
+            TrajectorySetpoint, self._topic("/fmu/in/trajectory_setpoint"), px4_qos
+        )
+        self.vehicle_command_pub = self.create_publisher(
+            VehicleCommand, self._topic("/fmu/in/vehicle_command"), px4_qos
+        )
+        self.debug_pub = (
+            self.create_publisher(String, self.debug_topic, 10)
+            if self.debug_enabled
+            else None
+        )
 
         # ---- Subscribers --------------------------------------------------
-        self.create_subscription(VehicleLocalPosition, self._topic("/fmu/out/vehicle_local_position"), self._local_pos_cb, px4_qos)
-        self.create_subscription(VehicleStatus,        self._topic("/fmu/out/vehicle_status_v1"),       self._status_cb,    px4_qos)
-        self.create_subscription(VtolVehicleStatus,    self._topic("/fmu/out/vtol_vehicle_status"),     self._vtol_cb,      px4_qos)
-        self.create_subscription(AirspeedValidated,    self._topic("/fmu/out/airspeed_validated"),      self._airspeed_cb,  px4_qos)
-        self.create_subscription(Float32MultiArray, self.command_topic, self._command_cb, 10)
+        self.create_subscription(
+            VehicleLocalPosition,
+            self._topic("/fmu/out/vehicle_local_position"),
+            self._local_pos_cb,
+            px4_qos,
+        )
+        self.create_subscription(
+            VehicleStatus,
+            self._topic("/fmu/out/vehicle_status_v1"),
+            self._status_cb,
+            px4_qos,
+        )
+        self.create_subscription(
+            VtolVehicleStatus,
+            self._topic("/fmu/out/vtol_vehicle_status"),
+            self._vtol_cb,
+            px4_qos,
+        )
+        self.create_subscription(
+            AirspeedValidated,
+            self._topic("/fmu/out/airspeed_validated"),
+            self._airspeed_cb,
+            px4_qos,
+        )
+        self.create_subscription(
+            Float32MultiArray, self.command_topic, self._command_cb, 10
+        )
         self.create_subscription(Empty, self.request_fw_topic, self._req_fw_cb, 10)
         self.create_subscription(Empty, self.request_mc_topic, self._req_mc_cb, 10)
         self.create_subscription(Empty, self.land_topic, self._land_cb, 10)
@@ -196,7 +265,35 @@ class VtolStateMachine(Node):
         period_s = 1.0 / max(self.setpoint_rate_hz, 1.0)
         self.create_timer(period_s, self._timer_cb)
 
-        self.get_logger().info("VTOL offboard state machine started")
+        self.get_logger().info(
+            f"VTOL offboard state machine started — "
+            f"instance={instance} fmu_prefix='{self.fmu_prefix}' "
+            f"target_system={self.target_system}"
+        )
+        self.get_logger().info(
+            f"Loaded params: "
+            f"takeoff_height_m={self.takeoff_height_m} "
+            f"hover_yaw_rad={self.hover_yaw_rad} "
+            f"setpoint_rate_hz={self.setpoint_rate_hz} "
+            f"offboard_warmup_cycles={self.offboard_warmup_cycles} "
+            f"takeoff_reached_tol_m={self.takeoff_reached_tol_m} "
+            f"yaw_align_tol_deg={self.yaw_align_tol_deg} | "
+            f"fw_heading_deg={self.fw_heading_deg} "
+            f"fw_speed_mps={self.fw_speed_mps} "
+            f"fw_lookahead_m={self.fw_lookahead_m} "
+            f"fw_min_arsp_gate_mps={self.fw_min_arsp_gate_mps} "
+            f"fw_max_yaw_rate_deg_s={self.fw_max_yaw_rate_deg_s} "
+            f"fw_alt_err_kp={self.fw_alt_err_kp} "
+            f"fw_alt_max_vz_mps={self.fw_alt_max_vz_mps} | "
+            f"loiter={self.loiter} "
+            f"loiter_radius_m={self.loiter_radius_m} "
+            f"loiter_lookahead_m={self.loiter_lookahead_m} | "
+            f"cmd_timeout_s={self.cmd_timeout_s} "
+            f"cmd_vel_lookahead_s={self.cmd_vel_lookahead_s} | "
+            f"debug_enabled={self.debug_enabled} "
+            f"debug_topic='{self.debug_topic}' | "
+            f"command_topic='{self.command_topic}'"
+        )
 
     # -----------------------------------------------------------------------
     # Helpers
@@ -223,22 +320,33 @@ class VtolStateMachine(Node):
         return (a + math.pi) % (2.0 * math.pi) - math.pi
 
     def _is_vtol_mc(self) -> bool:
-        return self.vtol_vehicle_status.vehicle_vtol_state == VtolVehicleStatus.VEHICLE_VTOL_STATE_MC
+        return (
+            self.vtol_vehicle_status.vehicle_vtol_state
+            == VtolVehicleStatus.VEHICLE_VTOL_STATE_MC
+        )
 
     def _is_vtol_fw(self) -> bool:
-        return self.vtol_vehicle_status.vehicle_vtol_state == VtolVehicleStatus.VEHICLE_VTOL_STATE_FW
+        return (
+            self.vtol_vehicle_status.vehicle_vtol_state
+            == VtolVehicleStatus.VEHICLE_VTOL_STATE_FW
+        )
 
     def _is_offboard(self) -> bool:
         return self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD
 
     def _takeoff_reached(self) -> bool:
-        return abs(self.vehicle_local_position.z - self.takeoff_z) <= self.takeoff_reached_tol_m
+        return (
+            abs(self.vehicle_local_position.z - self.takeoff_z)
+            <= self.takeoff_reached_tol_m
+        )
 
     def _yaw_aligned(self) -> bool:
         heading = self.vehicle_local_position.heading
         if not math.isfinite(heading):
             return True  # skip alignment if heading unavailable
-        return abs(self._wrap_pi(heading - self.mc_yaw)) <= math.radians(self.yaw_align_tol_deg)
+        return abs(self._wrap_pi(heading - self.mc_yaw)) <= math.radians(
+            self.yaw_align_tol_deg
+        )
 
     def _now_us(self) -> int:
         return int(self.get_clock().now().nanoseconds / 1000)
@@ -359,7 +467,9 @@ class VtolStateMachine(Node):
         if len(msg.data) >= 3:
             raw_mode = float(msg.data[2])
             if not math.isfinite(raw_mode) or not raw_mode.is_integer():
-                self.get_logger().warn(f"Invalid command type value {raw_mode}: '{msg.data}'")
+                self.get_logger().warn(
+                    f"Invalid command type value {raw_mode}: '{msg.data}'"
+                )
                 return
             cmd_mode = int(raw_mode)
 
@@ -370,7 +480,9 @@ class VtolStateMachine(Node):
             self.get_logger().warn(f"Invalid command values: '{msg.data}'")
             return
         if cmd_mode == 1 and math.hypot(cmd_a, cmd_b) <= 1e-6:
-            self.get_logger().warn(f"Invalid velocity direction (near-zero norm): '{msg.data}'")
+            self.get_logger().warn(
+                f"Invalid velocity direction (near-zero norm): '{msg.data}'"
+            )
             return
 
         self.cmd_mode = cmd_mode
@@ -379,9 +491,13 @@ class VtolStateMachine(Node):
         self.cmd_stamp_us = self._now_us()
         if not self.cmd_overriding:
             if self.cmd_mode == 0:
-                self.get_logger().info(f"FW position override enabled: ({self.cmd_a:.1f}, {self.cmd_b:.1f})")
+                self.get_logger().info(
+                    f"FW position override enabled: ({self.cmd_a:.1f}, {self.cmd_b:.1f})"
+                )
             else:
-                self.get_logger().info(f"FW velocity-direction override enabled: ({self.cmd_a:.3f}, {self.cmd_b:.3f})")
+                self.get_logger().info(
+                    f"FW velocity-direction override enabled: ({self.cmd_a:.3f}, {self.cmd_b:.3f})"
+                )
         return
 
     @staticmethod
@@ -407,7 +523,9 @@ class VtolStateMachine(Node):
     # Publishers
     # -----------------------------------------------------------------------
 
-    def _heartbeat(self, position_ctrl: bool = True, velocity_ctrl: bool = True) -> None:
+    def _heartbeat(
+        self, position_ctrl: bool = True, velocity_ctrl: bool = True
+    ) -> None:
         """
         Offboard mode requires a non-empty stream of OffboardControlMode messages.
         This is the "heartbeat" that keeps offboard mode alive and indicates
@@ -430,7 +548,9 @@ class VtolStateMachine(Node):
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
         self.trajectory_sp_pub.publish(msg)
 
-    def _pursue_target_xy(self, target_x: float, target_y: float) -> tuple[float, float, float]:
+    def _pursue_target_xy(
+        self, target_x: float, target_y: float
+    ) -> tuple[float, float, float]:
         """Pure-pursuit velocity and yaw toward an arbitrary XY lookahead target."""
         cx = self.vehicle_local_position.x
         cy = self.vehicle_local_position.y
@@ -450,7 +570,9 @@ class VtolStateMachine(Node):
         desired_heading = math.atan2(uy, ux)
         return vx, vy, desired_heading
 
-    def _arc_constrained_target(self, target_x: float, target_y: float) -> tuple[float, float]:
+    def _arc_constrained_target(
+        self, target_x: float, target_y: float
+    ) -> tuple[float, float]:
         """Project the position setpoint onto the minimum-radius turn arc.
 
         If the raw target would require a heading change larger than alpha_max
@@ -461,7 +583,11 @@ class VtolStateMachine(Node):
         if self.fw_max_yaw_rate_deg_s <= 0.0:
             return target_x, target_y
 
-        psi = self.last_fw_yaw_sp if self.last_fw_yaw_sp is not None else self.fw_path_heading_rad
+        psi = (
+            self.last_fw_yaw_sp
+            if self.last_fw_yaw_sp is not None
+            else self.fw_path_heading_rad
+        )
         cx = self.vehicle_local_position.x
         cy = self.vehicle_local_position.y
 
@@ -534,12 +660,20 @@ class VtolStateMachine(Node):
         else:
             target_x, target_y = self._fw_target_xy()
 
-        allow_override = self.state in (FlightState.FW_EXECUTE, FlightState.REQUEST_VTOL_MC)
+        allow_override = self.state in (
+            FlightState.FW_EXECUTE,
+            FlightState.REQUEST_VTOL_MC,
+        )
         if allow_override:
             now_us = self._now_us()
             cmd_fresh = self._cmd_is_fresh(now_us)
 
-            if cmd_fresh and self.cmd_mode is not None and self.cmd_a is not None and self.cmd_b is not None:
+            if (
+                cmd_fresh
+                and self.cmd_mode is not None
+                and self.cmd_a is not None
+                and self.cmd_b is not None
+            ):
                 has_override_target = True
                 if self.cmd_mode == 0:
                     target_x = self.cmd_a
@@ -547,14 +681,22 @@ class VtolStateMachine(Node):
                 else:
                     direction_norm = math.hypot(self.cmd_a, self.cmd_b)
                     if direction_norm <= 1e-6:
-                        self.get_logger().warn("Velocity-direction command became invalid; ignoring override")
+                        self.get_logger().warn(
+                            "Velocity-direction command became invalid; ignoring override"
+                        )
                         has_override_target = False
                     else:
                         unit_x = self.cmd_a / direction_norm
                         unit_y = self.cmd_b / direction_norm
-                        lookahead_dist_m = self.fw_speed_mps * max(self.cmd_vel_lookahead_s, 0.0)
-                        target_x = self.vehicle_local_position.x + unit_x * lookahead_dist_m
-                        target_y = self.vehicle_local_position.y + unit_y * lookahead_dist_m
+                        lookahead_dist_m = self.fw_speed_mps * max(
+                            self.cmd_vel_lookahead_s, 0.0
+                        )
+                        target_x = (
+                            self.vehicle_local_position.x + unit_x * lookahead_dist_m
+                        )
+                        target_y = (
+                            self.vehicle_local_position.y + unit_y * lookahead_dist_m
+                        )
                 if has_override_target:
                     if not self.cmd_overriding:
                         if self.cmd_mode == 0:
@@ -585,7 +727,10 @@ class VtolStateMachine(Node):
             and self.last_fw_yaw_sp is not None
             and self.last_fw_yaw_sp_us is not None
         ):
-            dt = max((now_us - self.last_fw_yaw_sp_us) * 1e-6, 1.0 / max(self.setpoint_rate_hz, 1.0))
+            dt = max(
+                (now_us - self.last_fw_yaw_sp_us) * 1e-6,
+                1.0 / max(self.setpoint_rate_hz, 1.0),
+            )
             max_delta = math.radians(self.fw_max_yaw_rate_deg_s) * dt
             yaw_delta = self._wrap_pi(desired_heading - self.last_fw_yaw_sp)
             if yaw_delta > max_delta:
@@ -605,8 +750,10 @@ class VtolStateMachine(Node):
         # during banked turns. NED: negative vz = upward.
         z_target = -abs(self.fw_alt_m)
         alt_error = z_target - self.vehicle_local_position.z
-        vz_ff = max(-self.fw_alt_max_vz_mps,
-                    min(self.fw_alt_max_vz_mps, self.fw_alt_err_kp * alt_error))
+        vz_ff = max(
+            -self.fw_alt_max_vz_mps,
+            min(self.fw_alt_max_vz_mps, self.fw_alt_err_kp * alt_error),
+        )
         self._last_alt_error = alt_error
         self._last_vz_ff = vz_ff
 
@@ -638,11 +785,15 @@ class VtolStateMachine(Node):
         self.vehicle_command_pub.publish(msg)
 
     def _engage_offboard(self) -> None:
-        self._pub_vehicle_cmd(VehicleCommand.VEHICLE_CMD_DO_SET_MODE, param1=1.0, param2=6.0)
+        self._pub_vehicle_cmd(
+            VehicleCommand.VEHICLE_CMD_DO_SET_MODE, param1=1.0, param2=6.0
+        )
         self.get_logger().info("Offboard mode requested")
 
     def _arm(self) -> None:
-        self._pub_vehicle_cmd(VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, param1=1.0)
+        self._pub_vehicle_cmd(
+            VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, param1=1.0
+        )
         self.get_logger().info("Arm requested")
 
     def _cmd_transition_fw(self) -> None:
@@ -689,9 +840,12 @@ class VtolStateMachine(Node):
 
     def _timer_cb(self) -> None:
         # Consume flags atomically (each acted on at most once per tick)
-        want_fw = self.pending_fw;   self.pending_fw = False
-        want_mc = self.pending_mc;   self.pending_mc = False
-        want_land = self.pending_land; self.pending_land = False
+        want_fw = self.pending_fw
+        self.pending_fw = False
+        want_mc = self.pending_mc
+        self.pending_mc = False
+        want_land = self.pending_land
+        self.pending_land = False
 
         # Landing is highest priority
         if want_land and self.state != FlightState.LANDING:
@@ -703,11 +857,15 @@ class VtolStateMachine(Node):
         if self.state == FlightState.WARMUP_SETPOINTS:
             if not self._is_vtol_mc():
                 self._heartbeat(position_ctrl=True, velocity_ctrl=False)
-                self._pub_mc_setpoint(self.takeoff_x, self.takeoff_y, self.takeoff_z, self.hover_yaw_rad)
+                self._pub_mc_setpoint(
+                    self.takeoff_x, self.takeoff_y, self.takeoff_z, self.hover_yaw_rad
+                )
                 self._cmd_transition_mc()
                 return
             self._heartbeat(position_ctrl=True, velocity_ctrl=False)
-            self._pub_mc_setpoint(self.takeoff_x, self.takeoff_y, self.takeoff_z, self.hover_yaw_rad)
+            self._pub_mc_setpoint(
+                self.takeoff_x, self.takeoff_y, self.takeoff_z, self.hover_yaw_rad
+            )
             self.warmup_counter += 1
             if self.warmup_counter >= self.offboard_warmup_cycles:
                 self._set_state(FlightState.REQUEST_OFFBOARD_ARM)
@@ -718,7 +876,9 @@ class VtolStateMachine(Node):
         # ------------------------------------------------------------------
         if self.state == FlightState.REQUEST_OFFBOARD_ARM:
             self._heartbeat(position_ctrl=True, velocity_ctrl=False)
-            self._pub_mc_setpoint(self.takeoff_x, self.takeoff_y, self.takeoff_z, self.hover_yaw_rad)
+            self._pub_mc_setpoint(
+                self.takeoff_x, self.takeoff_y, self.takeoff_z, self.hover_yaw_rad
+            )
             self._engage_offboard()
             self._arm()
             self._set_state(FlightState.MC_TAKEOFF)
@@ -729,7 +889,9 @@ class VtolStateMachine(Node):
         # ------------------------------------------------------------------
         if self.state == FlightState.MC_TAKEOFF:
             self._heartbeat(position_ctrl=True, velocity_ctrl=False)
-            self._pub_mc_setpoint(self.takeoff_x, self.takeoff_y, self.takeoff_z, self.hover_yaw_rad)
+            self._pub_mc_setpoint(
+                self.takeoff_x, self.takeoff_y, self.takeoff_z, self.hover_yaw_rad
+            )
             if self._is_offboard() and self._takeoff_reached():
                 self._set_state(FlightState.MC_HOVER)
             return
@@ -766,7 +928,8 @@ class VtolStateMachine(Node):
             heading = self.vehicle_local_position.heading
             yaw_err_deg = (
                 math.degrees(abs(self._wrap_pi(heading - self.mc_yaw)))
-                if math.isfinite(heading) else 0.0
+                if math.isfinite(heading)
+                else 0.0
             )
             self._dbg(f"yaw_err={yaw_err_deg:.1f}deg")
             if self._yaw_aligned():
@@ -788,11 +951,10 @@ class VtolStateMachine(Node):
                 return
 
             tas = self.airspeed_validated.true_airspeed_m_s
-            arsp_valid = (
-                math.isfinite(tas)
-                and tas >= self.fw_min_arsp_gate_mps
+            arsp_valid = math.isfinite(tas) and tas >= self.fw_min_arsp_gate_mps
+            self._dbg(
+                f"tas={tas:.1f} gate={self.fw_min_arsp_gate_mps:.1f} ready={int(arsp_valid)}"
             )
-            self._dbg(f"tas={tas:.1f} gate={self.fw_min_arsp_gate_mps:.1f} ready={int(arsp_valid)}")
 
             if arsp_valid:
                 self._set_state(FlightState.AWAITING_FW_TRANSITION)
@@ -817,7 +979,9 @@ class VtolStateMachine(Node):
             if not self.vtol_fw_sent:
                 self._cmd_transition_fw()
                 self.vtol_fw_sent = True
-                self.get_logger().info("FW transition command sent, awaiting completion...")
+                self.get_logger().info(
+                    "FW transition command sent, awaiting completion..."
+                )
                 self._dbg("action=fw_cmd_sent")
 
             if want_mc:
@@ -849,7 +1013,7 @@ class VtolStateMachine(Node):
         # ------------------------------------------------------------------
         if self.state == FlightState.REQUEST_VTOL_MC:
             self._heartbeat(position_ctrl=True, velocity_ctrl=True)
-            self._pub_fw_setpoint()   # keep airspeed valid during back-transition
+            self._pub_fw_setpoint()  # keep airspeed valid during back-transition
 
             if not self.vtol_mc_sent:
                 self._cmd_transition_mc()
@@ -874,6 +1038,7 @@ class VtolStateMachine(Node):
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main(args=None) -> None:
     node = None

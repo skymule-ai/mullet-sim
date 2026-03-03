@@ -179,7 +179,9 @@ def _validate_fleet(fleet) -> bool:
         try:
             inst = int(vehicle["instance"])
         except Exception:
-            errors.append(f"{label}: invalid instance value {vehicle.get('instance')!r}")
+            errors.append(
+                f"{label}: invalid instance value {vehicle.get('instance')!r}"
+            )
             continue
 
         instances.append(inst)
@@ -218,20 +220,21 @@ def _validate_fleet(fleet) -> bool:
             )
 
     if instances:
+        for inst in instances:
+            if inst < 0:
+                errors.append(f"instance values must be >= 0, got {inst}")
         if len(set(instances)) != len(instances):
-            errors.append(
-                f"fleet instances must be unique, got: {sorted(instances)}"
-            )
+            errors.append(f"fleet instances must be unique, got: {sorted(instances)}")
         else:
             sorted_instances = sorted(instances)
-            if sorted_instances[0] != 0:
-                errors.append(
-                    f"fleet must start at instance 0, got min instance {sorted_instances[0]}"
-                )
-            expected_instances = list(range(len(sorted_instances)))
-            if sorted_instances != expected_instances:
-                errors.append(
-                    f"fleet instances must be contiguous from 0, expected {expected_instances}, got {sorted_instances}"
+            # Check for gaps (warning only - gaps are allowed but may be unintentional)
+            expected_contiguous = list(
+                range(sorted_instances[0], sorted_instances[0] + len(sorted_instances))
+            )
+            if sorted_instances != expected_contiguous:
+                _err(
+                    f"[mullet] warning: fleet instances are not contiguous: {sorted_instances} "
+                    f"(expected {expected_contiguous} if no gaps intended)"
                 )
 
     if errors:
@@ -313,9 +316,15 @@ def main() -> int:
     signal.signal(signal.SIGTERM, shutdown)
 
     # Launch PX4 instances.
-    # Per PX4 docs: first instance starts gz-server (do NOT set PX4_GZ_STANDALONE).
-    # Subsequent instances set PX4_GZ_STANDALONE=1 to attach.
+    # Per PX4 docs: the FIRST launched instance starts gz-server (do NOT set PX4_GZ_STANDALONE).
+    # All subsequent instances must set PX4_GZ_STANDALONE=1 to attach to the running server.
+    # Instances are launched in ascending order; the lowest instance number is the server-starter.
     fleet_sorted = sorted(fleet, key=lambda v: int(v["instance"]))
+
+    server_inst = int(fleet_sorted[0]["instance"])
+    print(
+        f"[mullet] gz-server will be started by PX4 instance {server_inst}", flush=True
+    )
 
     for idx, v in enumerate(fleet_sorted):
         inst = int(v["instance"])
@@ -346,6 +355,12 @@ def main() -> int:
 
         if idx != 0:
             env["PX4_GZ_STANDALONE"] = "1"
+
+        env["PX4_PARAM_COM_RC_IN_MODE"] = "4" # Stick input disables
+        env["PX4_PARAM_NAV_RCL_ACT"] = "2" # This should not be used. (default 2)
+        env["PX4_PARAM_NAV_DLL_ACT"] = "0"
+        env["PX4_PARAM_COM_DL_LOSS_T"] = "300"
+        env["PX4_PARAM_COM_RC_LOSS_T"] = "300"
 
         px4_bin = os.environ.get("PX4_BIN", "px4")
         cmd = [px4_bin, "-i", str(inst)]

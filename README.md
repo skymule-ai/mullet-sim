@@ -77,11 +77,26 @@ Fleet config is `config/drones.yaml`.
 - `simulation.world` sets `PX4_GZ_WORLD` (e.g. `default`, `windy`, `moving_platform`, `baylands`).
 - `simulation.gz_ip` sets `GZ_IP` (Gazebo transport IP). Default is `127.0.0.1`, matching `make px4_sitl ...`.
 - `simulation.headless: true` sets `HEADLESS=1` for PX4 (no Gazebo GUI).
-- `fleet[].instance` must be unique, must start at `0`, and must be contiguous (`0,1,2,...`).
+- `simulation.ros_domain_id` sets `ROS_DOMAIN_ID` (DDS domain for ROS 2 and uXRCE-DDS agent).
+- `simulation.xrce_agent.transport` and `simulation.xrce_agent.port` configure the MicroXRCEAgent command (default `udp4`, port `8888`).
+- `fleet[].instance` must be a unique integer `>= 0`. Any starting offset is allowed (e.g. `1,2,3` or `10,11`). Gaps are allowed but a warning is printed. The launcher always launches in ascending instance order, and the **lowest** instance starts the Gazebo server.
+- `fleet[].id` is an optional human-readable identifier (metadata only).
 - `fleet[].px4_sys_autostart` is the PX4 airframe autostart id.
 - `fleet[].px4_sim_model` is the Gazebo model name (PX4 uses `PX4_SIM_MODEL`). Example: `gz_x500`.
 - `fleet[].pose` maps to `PX4_GZ_MODEL_POSE` (`x,y,z,roll,pitch,yaw` in meters/radians).
 - For known PX4 SITL vehicles, `px4_sys_autostart` and `px4_sim_model` must match their standard pair (launcher validates this and fails fast on mismatch).
+
+### Instance numbering and ROS 2 topic prefixes
+
+PX4 maps instance numbers directly to ROS 2 topic namespaces via the uXRCE-DDS agent:
+
+| Instance | ROS 2 prefix |
+|----------|-------------|
+| `0` | *(no prefix)* — topics at `/fmu/...` |
+| `1` | `/px4_1/fmu/...` |
+| `N` | `/px4_N/fmu/...` |
+
+For multi-robot work, **starting your fleet at instance `1`** is recommended so that every vehicle gets a named prefix (`/px4_1/...`, `/px4_2/...`) and no vehicle occupies the ambiguous unprefixed namespace.
 
 ## Supported Vehicle Models
 
@@ -141,7 +156,7 @@ The simulation supports multiple worlds. Specify a world using the `simulation.w
 
 ### Example Configuration
 
-Single VTOL baseline (matches `make px4_sitl gz_standard_vtol` behavior):
+Single VTOL baseline — instance 0 (matches `make px4_sitl gz_standard_vtol` behavior, unprefixed ROS topics):
 
 ```yaml
 simulation:
@@ -156,7 +171,22 @@ fleet:
     pose: [0, 0, 0.1, 0, 0, 0]
 ```
 
-Multi-vehicle example:
+Single VTOL baseline — instance 1 (ROS 2 topics under `/px4_1/...`):
+
+```yaml
+simulation:
+  world: default
+  gz_ip: 127.0.0.1
+  headless: false
+
+fleet:
+  - instance: 1
+    px4_sys_autostart: 4004
+    px4_sim_model: gz_standard_vtol
+    pose: [0, 0, 0.1, 0, 0, 0]
+```
+
+Multi-vehicle example starting at instance 1 (topics: `/px4_1/...`, `/px4_2/...`):
 
 ```yaml
 simulation:
@@ -165,11 +195,11 @@ simulation:
   headless: false
 
 fleet:
-  - instance: 0
+  - instance: 1
     px4_sys_autostart: 4001
     px4_sim_model: gz_x500
     pose: [0, 0, 0, 0, 0, 0]
-  - instance: 1
+  - instance: 2
     px4_sys_autostart: 4004
     px4_sim_model: gz_standard_vtol
     pose: [5, 0, 0, 0, 0, 0]
@@ -195,8 +225,42 @@ Notes:
 - We export `XRCE_DOMAIN_ID_OVERRIDE` to keep the agent's DDS domain aligned with `ROS_DOMAIN_ID` when supported.
 
 In PX4 multi-vehicle ROS 2 setups you should see topics like:
-- `/px4_1/...`
-- `/px4_2/...`
+- `/px4_1/...` (instance 1)
+- `/px4_2/...` (instance 2)
+
+If you use instance 0, that vehicle's topics appear unprefixed at the root (e.g. `/fmu/out/vehicle_local_position`).
+
+## Environment Variables (Launcher)
+
+These are consumed or set by `scripts/spawn_fleet.py`.
+
+### Launcher-level
+
+- `MULLET_RUNTIME_DIR` (default `/tmp/runtime`): log directory for `px4_<instance>.log` and `xrce_agent.log`.
+- `ROS_DOMAIN_ID`: DDS domain for ROS 2 and the uXRCE-DDS agent (overridden by `simulation.ros_domain_id` when set).
+- `GZ_IP`: Gazebo transport IP. Precedence: existing `GZ_IP` > `simulation.gz_ip` > `127.0.0.1`.
+- `XRCE_DOMAIN_ID_OVERRIDE`: defaults to `ROS_DOMAIN_ID` to keep the agent domain aligned when supported.
+- `PX4_BIN` (default `px4`): PX4 binary to execute.
+- `PX4_GZ_SIM_RENDER_ENGINE`: optional renderer override (pass-through if set).
+
+### Per-vehicle PX4/Gazebo variables
+
+- `PX4_SYS_AUTOSTART` from `fleet[].px4_sys_autostart`.
+- `PX4_SIM_MODEL` from `fleet[].px4_sim_model`.
+- `PX4_GZ_WORLD` from `simulation.world`.
+- `PX4_GZ_MODEL_POSE` from `fleet[].pose`.
+- `HEADLESS=1` when `simulation.headless: true`.
+- `PX4_GZ_STANDALONE=1` for all but the first-launched instance (lowest instance starts `gz-server`).
+
+### PX4 parameter overrides (enforced defaults)
+
+These parameters are set via environment variables for predictable SITL behavior. Update `scripts/spawn_fleet.py` if you need different values.
+
+- `PX4_PARAM_COM_RC_IN_MODE=4`
+- `PX4_PARAM_NAV_RCL_ACT=2`
+- `PX4_PARAM_NAV_DLL_ACT=0`
+- `PX4_PARAM_COM_DL_LOSS_T=300`
+- `PX4_PARAM_COM_RC_LOSS_T=300`
 
 ## Future Work
 
