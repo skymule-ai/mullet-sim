@@ -1,6 +1,6 @@
 simulation:
   # Gazebo world name (PX4_GZ_WORLD). Example: default, windy, moving_platform
-  world: default
+  world: lawn
 
   # Gazebo transport IP (GZ_IP). Use 127.0.0.1 for this single-container setup.
   # If unset, launcher defaults to 127.0.0.1 (same as `make px4_sitl ...`).
@@ -42,9 +42,21 @@ fleet:
     px4_sim_model: gz_standard_vtol
     pose: [30.0, 0.0, 0.1, 0.0, 0.0, 0.0]
 
+  - id: 3
+    instance: 3
+    px4_sys_autostart: 4011
+    px4_sim_model: lawnmower
+    pose: [10.0, -5.0, 0.0, 0.0, 0.0, 0.0]
+
+  - id: 4
+    instance: 4
+    px4_sys_autostart: 4011
+    px4_sim_model: lawnmower
+    pose: [15.0, -5.0, 0.0, 0.0, 0.0, 0.0]
+
   # # Enable more vehicles; instances may start at any offset and need not be contiguous.
-  # - id: 3
-  #   instance: 3
-  #   px4_sys_autostart: 4004
-  #   px4_sim_model: gz_standard_vtol
-  #   pose: [0.0, 3.0, 0.1, 0.0, 0.0, 0.0]
+  # - id: 9
+  #   instance: 9
+  #   px4_sys_autostart: 4011
+  #   px4_sim_model: lawnmower
+  #   pose: [35.0, -5.0, 0.0, 0.0, 0.0, 0.0]

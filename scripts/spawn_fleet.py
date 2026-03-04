@@ -23,6 +23,7 @@ KNOWN_AUTOSTART_TO_MODEL = {
     4018: "gz_quadtailsitter",
     4019: "gz_x500_gimbal",
     4020: "gz_tiltrotor",
+    4011: "lawnmower",
     50000: "gz_rover_differential",
     51000: "gz_rover_ackermann",
     52000: "gz_rover_mecanum",
@@ -356,8 +357,8 @@ def main() -> int:
         if idx != 0:
             env["PX4_GZ_STANDALONE"] = "1"
 
-        env["PX4_PARAM_COM_RC_IN_MODE"] = "4" # Stick input disables
-        env["PX4_PARAM_NAV_RCL_ACT"] = "2" # This should not be used. (default 2)
+        env["PX4_PARAM_COM_RC_IN_MODE"] = "4"  # Stick input disables
+        env["PX4_PARAM_NAV_RCL_ACT"] = "2"  # This should not be used. (default 2)
         env["PX4_PARAM_NAV_DLL_ACT"] = "0"
         env["PX4_PARAM_COM_DL_LOSS_T"] = "300"
         env["PX4_PARAM_COM_RC_LOSS_T"] = "300"

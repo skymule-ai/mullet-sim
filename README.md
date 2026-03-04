@@ -136,6 +136,7 @@ PX4 Gazebo simulation supports a variety of vehicle types. Reference the full li
 | Differential Rover | `gz_rover_differential` | 50000 |
 | Ackermann Rover | `gz_rover_ackermann` | 51000 |
 | Mecanum Rover | `gz_rover_mecanum` | 52000 |
+| Zero Turn Lawnmower | `lawnmower` | 4011 |
 
 ### Available Simulation Worlds
 
@@ -203,6 +204,33 @@ fleet:
     px4_sys_autostart: 4004
     px4_sim_model: gz_standard_vtol
     pose: [5, 0, 0, 0, 0, 0]
+```
+
+Mixed VTOL + lawnmower example (sequential instances, lawn world):
+
+```yaml
+simulation:
+  world: lawn
+  gz_ip: 127.0.0.1
+  headless: false
+
+fleet:
+  - instance: 1
+    px4_sys_autostart: 4004
+    px4_sim_model: gz_standard_vtol
+    pose: [0, 0, 0.1, 0, 0, 0]
+  - instance: 2
+    px4_sys_autostart: 4004
+    px4_sim_model: gz_standard_vtol
+    pose: [5, 0, 0.1, 0, 0, 0]
+  - instance: 3
+    px4_sys_autostart: 4011
+    px4_sim_model: lawnmower
+    pose: [10, -5, 0, 0, 0, 0]
+  - instance: 4
+    px4_sys_autostart: 4011
+    px4_sim_model: lawnmower
+    pose: [15, -5, 0, 0, 0, 0]
 ```
 
 ## MAVLink Ports (Host)

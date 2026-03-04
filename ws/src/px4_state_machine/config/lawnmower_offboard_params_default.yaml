@@ -1,0 +1,17 @@
+/**:
+  ros__parameters:
+    # instance must match the PX4 instance number declared in drones.yaml.
+    # fmu_prefix (/px4_N) and target_system (N+1) are derived automatically.
+    # NOTE: Handled in the launch file.
+    instance: 0
+
+    # Offboard stream / arm timing
+    setpoint_rate_hz: 20.0
+    offboard_warmup_cycles: 20
+    rearm_interval_s: 2.0
+
+    # Hold setpoint. If any is NaN, it will be latched from current position.
+    hold_x: .nan
+    hold_y: .nan
+    hold_z: .nan
+    hold_yaw_rad: .nan

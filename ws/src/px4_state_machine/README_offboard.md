@@ -120,6 +120,26 @@ From any state:
 ros2 launch px4_state_machine px4_state_machine.launch.py
 ```
 
+## Lawnmower Offboard Hold
+
+This repo also ships a minimal offboard node for rovers/lawnmowers that:
+- streams the offboard heartbeat
+- arms the vehicle
+- switches to offboard mode
+- publishes a fixed hold setpoint
+
+Run it for the lawnmower instances (default assumes instances 4-8):
+
+```bash
+ros2 launch px4_state_machine lawnmower_offboard.launch.py
+```
+
+Override the instance list if needed:
+
+```bash
+ros2 launch px4_state_machine lawnmower_offboard.launch.py px4_instances:=4,5,6
+```
+
 ## Command Examples
 ```bash
 ros2 topic pub /request_fw std_msgs/msg/Empty "{}"

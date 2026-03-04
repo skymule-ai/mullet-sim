@@ -22,6 +22,7 @@ services:
       - MULLET_RUNTIME_DIR=/tmp/runtime
       - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
       - PYTHONPATH=/ws/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages
+      - ENTRYPOINT_MODE=sitl
       # Uncomment if you have rendering issues in Gazebo
       # - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-ogre}
     volumes:
@@ -67,6 +68,12 @@ services:
     restart: unless-stopped
 
     environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_DISABLE_REQUIRE=1
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=all
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
       - CONFIG_FILE=/config/drones.yaml
@@ -74,6 +81,9 @@ services:
       - MULLET_RUNTIME_DIR=/tmp/runtime
       - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
       - PYTHONPATH=/ws/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages
+      - ENTRYPOINT_MODE=no_sitl
+      # Uncomment if you have rendering issues in Gazebo
+      # - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-ogre}
     volumes:
       - ./config:/config:ro
       - ./scripts:/scripts:ro
@@ -91,5 +101,5 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    entrypoint: ["/usr/bin/env", "bash", "/scripts/entrypoint.sh"]
     network_mode: host
-    command: ["/bin/bash", "-c", "grep -qxF 'source /scripts/sourcefile.sh' ~/.bashrc || echo 'source /scripts/sourcefile.sh' >> ~/.bashrc; echo 'PX4_NO_SITL container running. This container is meant for running custom code that connects to the PX4_SITL container. To run PX4 SITL, start the px4_sitl service.'; tail -f /dev/null"]

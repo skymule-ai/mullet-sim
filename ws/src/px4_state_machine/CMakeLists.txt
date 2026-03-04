@@ -57,6 +57,7 @@ install(TARGETS
 
 install(PROGRAMS
   scripts/offboard.py
+  scripts/lawnmower_offboard.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
