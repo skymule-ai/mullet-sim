@@ -10,8 +10,9 @@
     offboard_warmup_cycles: 20
     rearm_interval_s: 2.0
 
-    # Hold setpoint. If any is NaN, it will be latched from current position.
-    hold_x: .nan
-    hold_y: .nan
-    hold_z: .nan
-    hold_yaw_rad: .nan
+    # Command override (Float32MultiArray on command_topic)
+    command_topic: "command"
+    cmd_timeout_s: 5.0
+    # Expected format: [vx, vy, yaw, omega] (m/s, m/s, rad, rad/s)
+    # Max speed clamp for sqrt(vx^2 + vy^2). If <= 0, no clamping.
+    max_speed_mps: 5.0

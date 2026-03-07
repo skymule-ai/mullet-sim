@@ -20,6 +20,9 @@ services:
       - CONFIG_FILE=/config/drones.yaml
       - WORKSPACE_DIR=/ws
       - MULLET_RUNTIME_DIR=/tmp/runtime
+      - PX4_BIN=${PX4_BIN:-/opt/PX4-Autopilot/build/px4_sitl_default/bin/px4}
+      - MULLET_RESET_PARAMS=${MULLET_RESET_PARAMS:-0}
+      - MULLET_PX4_REBUILD=${MULLET_PX4_REBUILD:-0}
       - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
       - PYTHONPATH=/ws/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages
       - ENTRYPOINT_MODE=sitl
@@ -79,6 +82,9 @@ services:
       - CONFIG_FILE=/config/drones.yaml
       - WORKSPACE_DIR=/ws
       - MULLET_RUNTIME_DIR=/tmp/runtime
+      - PX4_BIN=${PX4_BIN:-/opt/PX4-Autopilot/build/px4_sitl_default/bin/px4}
+      - MULLET_RESET_PARAMS=${MULLET_RESET_PARAMS:-0}
+      - MULLET_PX4_REBUILD=${MULLET_PX4_REBUILD:-0}
       - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
       - PYTHONPATH=/ws/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages
       - ENTRYPOINT_MODE=no_sitl

@@ -136,7 +136,7 @@ PX4 Gazebo simulation supports a variety of vehicle types. Reference the full li
 | Differential Rover | `gz_rover_differential` | 50000 |
 | Ackermann Rover | `gz_rover_ackermann` | 51000 |
 | Mecanum Rover | `gz_rover_mecanum` | 52000 |
-| Zero Turn Lawnmower | `lawnmower` | 4011 |
+| Zero Turn Lawnmower | `gz_lawnmower` | 4011 |
 
 ### Available Simulation Worlds
 
@@ -225,13 +225,22 @@ fleet:
     pose: [5, 0, 0.1, 0, 0, 0]
   - instance: 3
     px4_sys_autostart: 4011
-    px4_sim_model: lawnmower
+    px4_sim_model: gz_lawnmower
     pose: [10, -5, 0, 0, 0, 0]
   - instance: 4
     px4_sys_autostart: 4011
-    px4_sim_model: lawnmower
+    px4_sim_model: gz_lawnmower
     pose: [15, -5, 0, 0, 0, 0]
 ```
+
+### Airframe / Parameter Refresh
+
+PX4 persists per-instance parameters under `.../rootfs/<instance>/parameters*.bson`.
+After airframe default changes (for example in `4011_gz_lawnmower`), those persisted files can mask new defaults.
+
+- Run once with `MULLET_RESET_PARAMS=1 ./run.sh` to reset persisted params for launched instances.
+- Keep `MULLET_RESET_PARAMS=0` (default) for normal runs to preserve tuned state.
+- Optional: set `MULLET_PX4_REBUILD=1 ./run.sh` to force `make px4_sitl_default` during entrypoint startup.
 
 ## MAVLink Ports (Host)
 

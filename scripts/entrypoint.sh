@@ -14,19 +14,47 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
 fi
 
 AIRFRAME_DST="/opt/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/4011_gz_lawnmower"
+AIRFRAME_BUILD_DST="/opt/PX4-Autopilot/build/px4_sitl_default/etc/init.d-posix/airframes/4011_gz_lawnmower"
 AIRFRAME_URL="https://raw.githubusercontent.com/PX4/PX4-Autopilot/main/ROMFS/px4fmu_common/init.d-posix/airframes/4011_gz_lawnmower"
+MULLET_PX4_REBUILD="${MULLET_PX4_REBUILD:-0}"
 
-if [[ "$(id -u)" -eq 0 ]]; then
-  curl -fL --retry 3 --connect-timeout 10 -o "${AIRFRAME_DST}" "${AIRFRAME_URL}"
-elif command -v sudo >/dev/null 2>&1; then
-  sudo -n curl -fL --retry 3 --connect-timeout 10 -o "${AIRFRAME_DST}" "${AIRFRAME_URL}" || {
-    echo "Unable to patch ${AIRFRAME_DST}: sudo privileges are required." >&2
-    exit 1
-  }
-else
-  echo "Unable to patch ${AIRFRAME_DST}: run as root or provide sudo." >&2
+patch_airframe_file() {
+  local dst="$1"
+
+  if [[ "$(id -u)" -eq 0 ]]; then
+    curl -fL --retry 3 --connect-timeout 10 -o "${dst}" "${AIRFRAME_URL}"
+    return
+  fi
+
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -n curl -fL --retry 3 --connect-timeout 10 -o "${dst}" "${AIRFRAME_URL}" || {
+      echo "Unable to patch ${dst}: sudo privileges are required." >&2
+      exit 1
+    }
+    return
+  fi
+
+  echo "Unable to patch ${dst}: run as root or provide sudo." >&2
   exit 1
-fi
+}
+
+patch_airframe_file "${AIRFRAME_DST}"
+patch_airframe_file "${AIRFRAME_BUILD_DST}"
+
+# Rebuild PX4 only when explicitly requested.
+case "${MULLET_PX4_REBUILD,,}" in
+  1|true|yes|on)
+    echo "[mullet] rebuilding PX4 (MULLET_PX4_REBUILD=${MULLET_PX4_REBUILD})"
+    cd /opt/PX4-Autopilot
+    if ! make px4_sitl_default >/dev/null 2>&1; then
+      echo "PX4 build failed after patching airframe. Check build logs for details." >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "[mullet] skipping PX4 rebuild (set MULLET_PX4_REBUILD=1 to force rebuild)"
+    ;;
+esac
 
 # Add source sourcefile.sh to bashrc so that it gets sourced in every new shell, including tmux panes.
 if ! grep -qxF "source /scripts/sourcefile.sh" ~/.bashrc; then

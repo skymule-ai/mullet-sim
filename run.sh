@@ -67,19 +67,40 @@ done
   "bash -lc 'sleep 2; tail -n 200 -F ${RUNTIME_DIR_IN_CONTAINER}/xrce_agent.log'"
 
 
-# Window "shell": interactive shell inside container (custom layout)
-# Left: big column, Right: 2 horizontal splits
-"${tmux_base_cmd[@]}" new-window -d -t "${SESSION_NAME}" -n "shell" bash
-# Split right (vertical) for the right column
-"${tmux_base_cmd[@]}" split-window -h -t "${SESSION_NAME}:shell" bash
-# Colcon build the ROS2 workspace in the left column (pane 0)
-"${tmux_base_cmd[@]}" send-keys -t "${SESSION_NAME}:shell.1" \
-  "source /opt/ros/humble/setup.bash && colcon build && clear" Enter \
-  "ros2 launch px4_state_machine px4_state_machine.launch.py" Enter
-# Now split the right column (pane 1) horizontally into two
-"${tmux_base_cmd[@]}" split-window -v -t "${SESSION_NAME}:shell.2" bash
-# Select the leftmost pane (robust)
-"${tmux_base_cmd[@]}" select-pane -L -t "${SESSION_NAME}:shell"
+cmd_list=(
+  "source /opt/ros/humble/setup.bash && colcon build && clear && \
+  ros2 launch px4_state_machine px4_state_machine.launch.py"
+  "ros2 launch px4_state_machine lawnmower_offboard.launch.py"
+  "ros2 launch hedac_ros2 goal_density.launch.py"
+  "ros2 launch hedac_ros2 vtol_rviz_visualizer.launch.py"
+  "ros2 launch hedac_ros2 hedac_px4.launch.py"
+  "ros2 launch moe_gp moe_gp_px4.launch.py"
+)
+execute_cmds=("0")  # Indices of commands to execute immediately
+
+# Window "shell": interactive shell inside container (6-pane layout)
+shell_pane_id="$("${tmux_base_cmd[@]}" new-window -d -P -F "#{pane_id}" -t "${SESSION_NAME}" -n "shell" bash)"
+
+# Create 5 additional panes (total 6) and rebalance after each split.
+for _ in {1..5}; do
+  "${tmux_base_cmd[@]}" split-window -d -t "${SESSION_NAME}:shell" bash
+  "${tmux_base_cmd[@]}" select-layout -t "${SESSION_NAME}:shell" tiled
+done
+
+# For every command in the list, send it to a different pane in the "shell" window with Enter flag to execute immediately.
+for i in "${!cmd_list[@]}"; do
+  pane_id="$("${tmux_base_cmd[@]}" list-panes -t "${SESSION_NAME}:shell" -F "#{pane_id}" | sed -n "$((i + 1))p")"
+  if [[ " ${execute_cmds[@]} " =~ " $i " ]]; then
+    "${tmux_base_cmd[@]}" send-keys -t "${pane_id}" "${cmd_list[$i]}" Enter
+  else
+    "${tmux_base_cmd[@]}" send-keys -t "${pane_id}" "${cmd_list[$i]}"
+  fi
+done
+
+# Prepare the other commands from the command list, 1 per pane.
+
+# Focus the pane running build/launch.
+"${tmux_base_cmd[@]}" select-pane -t "${shell_pane_id}"
 
 "${tmux_base_cmd[@]}" select-window -t "${SESSION_NAME}:px4" || true
 

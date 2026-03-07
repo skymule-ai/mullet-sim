@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import shutil
 import shlex
 import signal
 import subprocess
@@ -23,12 +24,16 @@ KNOWN_AUTOSTART_TO_MODEL = {
     4018: "gz_quadtailsitter",
     4019: "gz_x500_gimbal",
     4020: "gz_tiltrotor",
-    4011: "lawnmower",
+    4011: "gz_lawnmower",
     50000: "gz_rover_differential",
     51000: "gz_rover_ackermann",
     52000: "gz_rover_mecanum",
 }
 KNOWN_MODEL_TO_AUTOSTART = {v: k for k, v in KNOWN_AUTOSTART_TO_MODEL.items()}
+
+DEFAULT_PX4_BIN = "px4"
+DEFAULT_ROOTFS_BASE = "/opt/PX4-Autopilot/build/px4_sitl_default/rootfs"
+PARAM_FILES_TO_RESET = ("parameters.bson", "parameters_backup.bson")
 
 
 def _err(msg: str) -> None:
@@ -39,6 +44,59 @@ def _run(cmd, env=None, stdout=None, stderr=None):
     return subprocess.Popen(
         cmd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid
     )
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_px4_bin() -> str:
+    configured = os.environ.get("PX4_BIN", DEFAULT_PX4_BIN).strip()
+    return configured or DEFAULT_PX4_BIN
+
+
+def _resolve_rootfs_base(px4_bin: str) -> str:
+    configured = os.environ.get("PX4_ROOTFS_BASE", "").strip()
+    if configured:
+        return configured
+
+    candidate = px4_bin
+    if "/" not in candidate:
+        resolved = shutil.which(candidate)
+        if not resolved:
+            return DEFAULT_ROOTFS_BASE
+        candidate = resolved
+
+    candidate = os.path.realpath(candidate)
+    parent = os.path.dirname(candidate)
+    if os.path.basename(candidate) == "px4" and os.path.basename(parent) == "bin":
+        return os.path.join(os.path.dirname(parent), "rootfs")
+
+    return DEFAULT_ROOTFS_BASE
+
+
+def _reset_instance_params(rootfs_base: str, instance: int) -> None:
+    instance_rootfs = os.path.join(rootfs_base, str(instance))
+    removed = []
+
+    for filename in PARAM_FILES_TO_RESET:
+        path = os.path.join(instance_rootfs, filename)
+        try:
+            os.remove(path)
+            removed.append(filename)
+        except FileNotFoundError:
+            pass
+        except Exception as exc:
+            _err(f"instance {instance}: unable to remove '{path}': {exc}")
+
+    if removed:
+        print(
+            f"[mullet] instance {instance}: reset persisted params ({', '.join(removed)})",
+            flush=True,
+        )
 
 
 def _parse_simple_yaml(path: str):
@@ -280,9 +338,24 @@ def main() -> int:
     env_base.setdefault("XRCE_DOMAIN_ID_OVERRIDE", str(ros_domain_id))
 
     runtime_dir = os.environ.get("MULLET_RUNTIME_DIR", "/tmp/runtime")
+    px4_bin = _resolve_px4_bin()
+    px4_resolved = shutil.which(px4_bin) if "/" not in px4_bin else px4_bin
+    rootfs_base = _resolve_rootfs_base(px4_bin)
+    reset_params = _env_bool("MULLET_RESET_PARAMS", default=False)
+
     os.makedirs(runtime_dir, exist_ok=True)
     print(f"[mullet] runtime dir: {runtime_dir}", flush=True)
     print(f"[mullet] GZ_IP={env_base['GZ_IP']}", flush=True)
+    print(f"[mullet] PX4_BIN={px4_bin}", flush=True)
+    if px4_resolved:
+        print(f"[mullet] PX4_BIN_RESOLVED={px4_resolved}", flush=True)
+    else:
+        _err(f"[mullet] warning: PX4_BIN '{px4_bin}' not found on PATH")
+    print(f"[mullet] PX4_ROOTFS_BASE={rootfs_base}", flush=True)
+    print(
+        f"[mullet] MULLET_RESET_PARAMS={'1' if reset_params else '0'}",
+        flush=True,
+    )
 
     # Start Micro XRCE agent (single agent for all PX4 instances)
     agent_cmd = ["MicroXRCEAgent", agent_transport, "-p", str(agent_port)]
@@ -363,7 +436,10 @@ def main() -> int:
         env["PX4_PARAM_COM_DL_LOSS_T"] = "300"
         env["PX4_PARAM_COM_RC_LOSS_T"] = "300"
 
-        px4_bin = os.environ.get("PX4_BIN", "px4")
+        if reset_params:
+            _reset_instance_params(rootfs_base, inst)
+            env["PX4_PARAM_SYS_AUTOCONFIG"] = "1"
+
         cmd = [px4_bin, "-i", str(inst)]
         print(
             f"[mullet] starting PX4 instance {inst}: PX4_SYS_AUTOSTART={sys_autostart} PX4_SIM_MODEL={sim_model} PX4_GZ_MODEL_POSE={pose}",

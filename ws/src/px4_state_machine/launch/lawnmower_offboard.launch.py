@@ -92,7 +92,7 @@ def generate_launch_description() -> LaunchDescription:
     package_share = get_package_share_directory("px4_state_machine")
     default_config_dir = os.path.join(package_share, "config")
 
-    instances = "3,4"
+    instances = "3,4,5,6"
 
     return LaunchDescription(
         [
