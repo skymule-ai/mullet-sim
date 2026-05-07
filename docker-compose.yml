@@ -19,7 +19,7 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
-      - CONFIG_FILE=${CONFIG_FILE:-/config/drones_x500_mppi.yaml}
+      - CONFIG_FILE=${CONFIG_FILE:-/config/drones.yaml}
       - WORKSPACE_DIR=/ws
       - MULLET_RUNTIME_DIR=/tmp/runtime
       - PX4_BIN=${PX4_BIN:-/opt/PX4-Autopilot/build/px4_sitl_default/bin/px4}
