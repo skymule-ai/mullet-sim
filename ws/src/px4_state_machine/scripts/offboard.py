@@ -32,7 +32,7 @@ from px4_msgs.msg import (
     VehicleLocalPosition,
     VehicleStatus,
     VtolVehicleStatus,
-    VehicleControlMode
+    VehicleControlMode,
 )
 
 
