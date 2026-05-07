@@ -32,6 +32,7 @@ from px4_msgs.msg import (
     VehicleLocalPosition,
     VehicleStatus,
     VtolVehicleStatus,
+    VehicleControlMode,
 )
 
 
@@ -200,6 +201,7 @@ class VtolStateMachine(Node):
         self.vehicle_status = VehicleStatus()
         self.vtol_vehicle_status = VtolVehicleStatus()
         self.airspeed_validated = AirspeedValidated()
+        self.vehicle_ctrl_mode = VehicleControlMode()
 
         self._last_alt_error = 0.0
         self._last_vz_ff = 0.0
@@ -253,6 +255,12 @@ class VtolStateMachine(Node):
             AirspeedValidated,
             self._topic("/fmu/out/airspeed_validated"),
             self._airspeed_cb,
+            px4_qos,
+        )
+        self.create_subscription(
+            VehicleControlMode,
+            self._topic("/fmu/out/vehicle_control_mode"),
+            self._ctrl_mode_cb,
             px4_qos,
         )
         self.create_subscription(
@@ -332,7 +340,8 @@ class VtolStateMachine(Node):
         )
 
     def _is_offboard(self) -> bool:
-        return self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD
+        # return self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD
+        return self.vehicle_ctrl_mode.flag_control_offboard_enabled
 
     def _takeoff_reached(self) -> bool:
         return (
@@ -450,6 +459,9 @@ class VtolStateMachine(Node):
 
     def _req_mc_cb(self, _: Empty) -> None:
         self.pending_mc = True
+
+    def _ctrl_mode_cb(self, msg: VehicleControlMode) -> None:
+        self.vehicle_ctrl_mode = msg
 
     def _command_cb(self, msg: Float32MultiArray) -> None:
         """
