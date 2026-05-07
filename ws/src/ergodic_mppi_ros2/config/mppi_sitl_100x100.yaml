@@ -1,0 +1,84 @@
+seed: 43
+steps: 5000
+
+robots:
+  num_robots: 1
+
+mppi:
+  T: 45
+  K: 256
+  lambda: 1.2
+  alpha: 0.2
+  exploration: 0.15
+  ess_target: 0.3
+  lam_min: 0.05
+  lam_max: 20.0
+  history_len: 100
+  dim_x: 6
+  dim_u: 3
+  noise:
+    sigma:
+      - [4.0, 0.0, 0.0]
+      - [0.0, 4.0, 0.0]
+      - [0.0, 0.0, 2.0]
+
+map:
+  x_limits: [0.0, 100.0]
+  y_limits: [0.0, 100.0]
+  resolution: 1.0
+  oom_cost: 1e7
+
+  obstacles:
+    num_obstacles: 6
+    min_radius: 2.0
+    max_radius: 5.0
+    x_limits: [10.0, 90.0]
+    y_limits: [10.0, 90.0]
+    weight: 1e6
+    safe_distance: 1.0
+
+density:
+  weights:
+    - 0.3333333333
+    - 0.3333333333
+    - 0.3333333333
+  means:
+    - [20.0, 80.0]
+    - [80.0, 80.0]
+    - [50.0, 20.0]
+  covariances:
+    - [[80.0, 0.0], [0.0, 80.0]]
+    - [[90.0, 10.0], [10.0, 90.0]]
+    - [[100.0, 0.0], [0.0, 100.0]]
+
+# Previous four-mode density:
+# density:
+#   weights:
+#     - 0.25
+#     - 0.25
+#     - 0.25
+#     - 0.25
+#   means:
+#     - [20.0, 80.0]
+#     - [80.0, 80.0]
+#     - [20.0, 20.0]
+#     - [80.0, 20.0]
+#   covariances:
+#     - [[80.0, 0.0], [0.0, 80.0]]
+#     - [[90.0, 10.0], [10.0, 90.0]]
+#     - [[90.0, -10.0], [-10.0, 90.0]]
+#     - [[100.0, 0.0], [0.0, 100.0]]
+
+stein:
+  weight_stein: 400.0
+  weight_pdf: 0.0
+  ell_self: 25.0
+  ell_x: 64.0
+  alpha_cross: 10.0
+  theta: 55.0
+
+model:
+  delta_t: 0.2
+  double_integrator:
+    max_accel_lin_abs: 6.0
+    max_accel_ang_abs: 8.0

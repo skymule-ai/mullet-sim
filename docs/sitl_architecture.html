@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mullet SITL Architecture</title>
+  <style>
+    :root {
+      --bg: #f5f7f4;
+      --panel: #ffffff;
+      --ink: #1f2a23;
+      --muted: #516156;
+      --line: #cdd7cf;
+      --accent: #2f7d4c;
+      --accent-soft: #dff0e6;
+      --warn: #8a4b20;
+      --host: #e9f2ff;
+      --container: #f2efe4;
+      --ros: #eef8f0;
+      --px4: #fdf1e7;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 20% 20%, #ffffff 0%, var(--bg) 70%);
+      color: var(--ink);
+    }
+
+    .page {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 8px 20px rgba(28, 45, 33, 0.06);
+    }
+
+    .header {
+      padding: 18px 20px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 0.2px;
+    }
+
+    .header p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .controls {
+      padding: 14px 20px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(140px, 1fr));
+      gap: 10px;
+      align-items: end;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    select,
+    button {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      padding: 0 10px;
+      font-size: 14px;
+    }
+
+    button {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      transition: filter 120ms ease;
+    }
+
+    button:hover {
+      filter: brightness(1.05);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+
+    .diagram {
+      padding: 10px;
+      min-height: 520px;
+    }
+
+    .diagram svg {
+      width: 100%;
+      height: 100%;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      background: linear-gradient(180deg, #fcfefd 0%, #f7faf8 100%);
+    }
+
+    .side {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .chip {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted);
+      margin-right: 6px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .legend .chip {
+      border: none;
+      color: #2a3a30;
+    }
+
+    .chip.host { background: var(--host); }
+    .chip.container { background: var(--container); }
+    .chip.ros { background: var(--ros); }
+    .chip.px4 { background: var(--px4); }
+
+    .details {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      min-height: 220px;
+      background: #fcfdfc;
+    }
+
+    .details h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .details p,
+    .details li {
+      color: var(--muted);
+      line-height: 1.4;
+      font-size: 14px;
+    }
+
+    .details code {
+      background: #edf2ee;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    .timeline {
+      padding: 14px;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .note {
+      padding: 12px 14px;
+      border-left: 4px solid var(--warn);
+      background: #fff8f2;
+      color: #6f4020;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    @media (max-width: 960px) {
+      .controls {
+        grid-template-columns: repeat(2, minmax(120px, 1fr));
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .diagram {
+        min-height: 420px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="card header">
+      <h1>Mullet SITL Interactive Architecture</h1>
+      <p>
+        Explore startup flow, ROS 2 control topology, and X500 command paths.
+        Use filters to inspect specific PX4 instances and launch profiles.
+      </p>
+    </section>
+
+    <section class="card controls">
+      <label>
+        View
+        <select id="viewSelect">
+          <option value="topology">Topology</option>
+          <option value="startup">Startup Sequence</option>
+          <option value="x500">X500 Offboard Path</option>
+        </select>
+      </label>
+
+      <label>
+        PX4 Instance
+        <select id="instanceSelect">
+          <option value="all">All Instances</option>
+          <option value="1">Instance 1</option>
+          <option value="2">Instance 2</option>
+          <option value="3">Instance 3</option>
+          <option value="4">Instance 4</option>
+        </select>
+      </label>
+
+      <label>
+        Show Labels
+        <select id="labelsSelect">
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+      </label>
+
+      <button id="resetBtn" type="button">Reset Focus</button>
+    </section>
+
+    <section class="grid">
+      <article class="card diagram">
+        <svg id="graphSvg" viewBox="0 0 1100 600" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+              <polygon points="0,0 10,4 0,8" fill="#849687"></polygon>
+            </marker>
+          </defs>
+        </svg>
+      </article>
+
+      <aside class="card side">
+        <div>
+          <strong>Legend</strong>
+          <div class="legend">
+            <span class="chip host">Host</span>
+            <span class="chip container">Container</span>
+            <span class="chip px4">PX4/Gazebo</span>
+            <span class="chip ros">ROS 2</span>
+          </div>
+        </div>
+
+        <div class="details" id="detailsPanel">
+          <h3>Selection</h3>
+          <p>Click any component in the diagram to inspect paths, topics, and source files.</p>
+        </div>
+
+        <div class="note">
+          Suggested X500 stack:
+          <code>CONFIG_PATH=config/drones_x500_mppi.yaml ./run.sh</code>
+          then launch
+          <code>ros2 launch px4_state_machine x500_offboard.launch.py px4_instances:=1,2</code>.
+        </div>
+      </aside>
+    </section>
+
+    <section class="card timeline">
+      <table>
+        <thead>
+          <tr>
+            <th>Stage</th>
+            <th>Process</th>
+            <th>What Happens</th>
+            <th>Main Files</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>Host bootstrap</td>
+            <td><code>run.sh</code> starts Docker and tmux panes, then tails runtime logs.</td>
+            <td><code>run.sh</code></td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>Container entrypoint</td>
+            <td>Entrypoint patches airframe files, sources ROS setup, then calls fleet spawner.</td>
+            <td><code>scripts/entrypoint.sh</code></td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>PX4 fleet launch</td>
+            <td><code>spawn_fleet.py</code> starts MicroXRCEAgent and PX4 instances sorted by instance id.</td>
+            <td><code>scripts/spawn_fleet.py</code>, <code>config/drones*.yaml</code></td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>ROS offboard</td>
+            <td>X500 node warms up setpoints, requests ARM/OFFBOARD, then takes off and hovers.</td>
+            <td><code>ws/src/px4_state_machine/scripts/x500_offboard.py</code></td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>Command loop</td>
+            <td>Coordinator publishes <code>[vx, vy, 1]</code> direction commands to each <code>/px4_N/command</code>.</td>
+            <td><code>ws/src/ergodic_mppi_ros2/ergodic_mppi_ros2/coordinator_node.py</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    const nodes = [
+      {
+        id: "host_run",
+        label: "run.sh",
+        layer: "host",
+        views: ["topology", "startup"],
+        box: [40, 80, 170, 70],
+        text: "Host entrypoint for Docker + tmux orchestration.",
+        refs: ["run.sh"]
+      },
+      {
+        id: "docker",
+        label: "docker-compose",
+        layer: "host",
+        views: ["topology", "startup"],
+        box: [250, 80, 190, 70],
+        text: "Starts px4_sitl and mounts /ws, /config, /scripts.",
+        refs: ["docker-compose.yml"]
+      },
+      {
+        id: "entrypoint",
+        label: "entrypoint.sh",
+        layer: "container",
+        views: ["topology", "startup"],
+        box: [490, 80, 190, 70],
+        text: "Container startup script that prepares environment and spawns fleet.",
+        refs: ["scripts/entrypoint.sh"]
+      },
+      {
+        id: "spawner",
+        label: "spawn_fleet.py",
+        layer: "container",
+        views: ["topology", "startup"],
+        box: [730, 80, 210, 70],
+        text: "Validates drones config and launches MicroXRCEAgent + PX4 instances.",
+        refs: ["scripts/spawn_fleet.py", "config/drones.yaml", "config/drones_x500_mppi.yaml"]
+      },
+      {
+        id: "px4_1",
+        label: "PX4 Instance 1",
+        layer: "px4",
+        views: ["topology", "x500"],
+        instances: ["1"],
+        box: [680, 260, 170, 70],
+        text: "X500 SITL stack publishing /px4_1/fmu/* topics.",
+        refs: ["config/drones_x500_mppi.yaml"]
+      },
+      {
+        id: "px4_2",
+        label: "PX4 Instance 2",
+        layer: "px4",
+        views: ["topology", "x500"],
+        instances: ["2"],
+        box: [890, 260, 170, 70],
+        text: "X500 SITL stack publishing /px4_2/fmu/* topics.",
+        refs: ["config/drones_x500_mppi.yaml"]
+      },
+      {
+        id: "x500_node",
+        label: "x500_offboard.py",
+        layer: "ros",
+        views: ["topology", "x500"],
+        box: [390, 250, 230, 85],
+        text: "ROS node handling warmup, arm/offboard, takeoff, hover, and command mode.",
+        refs: [
+          "ws/src/px4_state_machine/scripts/x500_offboard.py",
+          "ws/src/px4_state_machine/launch/x500_offboard.launch.py",
+          "ws/src/px4_state_machine/config/x500_offboard_params_default.yaml"
+        ]
+      },
+      {
+        id: "mppi_pkg",
+        label: "ergodic_mppi_ros2",
+        layer: "ros",
+        views: ["topology", "x500"],
+        box: [90, 250, 250, 85],
+        text: "Bootstrap ROS 2 package for multi-robot MPPI command generation.",
+        refs: [
+          "ws/src/ergodic_mppi_ros2/README.md",
+          "ws/src/ergodic_mppi_ros2/ergodic_mppi_ros2/coordinator_node.py",
+          "ws/src/ergodic_mppi_ros2/launch/ergodic_mppi_px4.launch.py"
+        ]
+      },
+      {
+        id: "topics",
+        label: "/px4_N/command",
+        layer: "ros",
+        views: ["x500", "topology"],
+        box: [360, 390, 200, 70],
+        text: "Command interface uses [vx, vy, 1] direction vectors.",
+        refs: ["ws/src/px4_state_machine/README_offboard.md"]
+      },
+      {
+        id: "docs",
+        label: "Architecture HTML",
+        layer: "host",
+        views: ["topology", "startup", "x500"],
+        box: [90, 500, 230, 60],
+        text: "Interactive architecture reference and startup checklist.",
+        refs: ["docs/sitl_architecture.html"]
+      }
+    ];
+
+    const edges = [
+      { from: "host_run", to: "docker", label: "docker compose up", views: ["topology", "startup"] },
+      { from: "docker", to: "entrypoint", label: "entrypoint", views: ["topology", "startup"] },
+      { from: "entrypoint", to: "spawner", label: "spawn fleet", views: ["topology", "startup"] },
+      { from: "spawner", to: "px4_1", label: "PX4 + XRCE", views: ["topology", "x500"], instances: ["1"] },
+      { from: "spawner", to: "px4_2", label: "PX4 + XRCE", views: ["topology", "x500"], instances: ["2"] },
+      { from: "mppi_pkg", to: "topics", label: "publish [vx,vy,1]", views: ["topology", "x500"] },
+      { from: "topics", to: "x500_node", label: "consume", views: ["topology", "x500"] },
+      { from: "x500_node", to: "px4_1", label: "/px4_1/fmu/in/*", views: ["topology", "x500"], instances: ["1"] },
+      { from: "x500_node", to: "px4_2", label: "/px4_2/fmu/in/*", views: ["topology", "x500"], instances: ["2"] },
+      { from: "docs", to: "host_run", label: "operational guide", views: ["topology", "startup", "x500"] }
+    ];
+
+    const svg = document.getElementById("graphSvg");
+    const viewSelect = document.getElementById("viewSelect");
+    const instanceSelect = document.getElementById("instanceSelect");
+    const labelsSelect = document.getElementById("labelsSelect");
+    const resetBtn = document.getElementById("resetBtn");
+    const detailsPanel = document.getElementById("detailsPanel");
+
+    let activeNodeId = null;
+
+    function layerColor(layer) {
+      if (layer === "host") return "var(--host)";
+      if (layer === "container") return "var(--container)";
+      if (layer === "ros") return "var(--ros)";
+      return "var(--px4)";
+    }
+
+    function pickNode(id) {
+      activeNodeId = id;
+      render();
+    }
+
+    function updateDetails(node) {
+      if (!node) {
+        detailsPanel.innerHTML = "<h3>Selection</h3><p>Click any component in the diagram to inspect paths, topics, and source files.</p>";
+        return;
+      }
+
+      const refs = (node.refs || []).map((ref) => `<li><code>${ref}</code></li>`).join("");
+      detailsPanel.innerHTML = [
+        `<h3>${node.label}</h3>`,
+        `<p>${node.text}</p>`,
+        `<p><span class="chip">Layer: ${node.layer}</span></p>`,
+        `<p><strong>Related files</strong></p>`,
+        `<ul>${refs}</ul>`
+      ].join("");
+    }
+
+    function nodeVisible(node, view, instance) {
+      if (!node.views.includes(view)) return false;
+      if (instance === "all") return true;
+      if (!node.instances) return true;
+      return node.instances.includes(instance);
+    }
+
+    function edgeVisible(edge, view, instance, visibleNodeIds) {
+      if (!edge.views.includes(view)) return false;
+      if (!visibleNodeIds.has(edge.from) || !visibleNodeIds.has(edge.to)) return false;
+      if (instance === "all") return true;
+      if (!edge.instances) return true;
+      return edge.instances.includes(instance);
+    }
+
+    function render() {
+      const view = viewSelect.value;
+      const instance = instanceSelect.value;
+      const showLabels = labelsSelect.value === "yes";
+      svg.querySelectorAll("g.dynamic").forEach((el) => el.remove());
+
+      const visibleNodes = nodes.filter((node) => nodeVisible(node, view, instance));
+      const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
+      const visibleEdges = edges.filter((edge) =>
+        edgeVisible(edge, view, instance, visibleNodeIds)
+      );
+
+      const edgeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      edgeGroup.classList.add("dynamic");
+
+      for (const edge of visibleEdges) {
+        const src = nodes.find((n) => n.id === edge.from);
+        const dst = nodes.find((n) => n.id === edge.to);
+        if (!src || !dst) continue;
+
+        const [sx, sy, sw, sh] = src.box;
+        const [dx, dy] = dst.box;
+        const x1 = sx + sw;
+        const y1 = sy + sh / 2;
+        const x2 = dx;
+        const y2 = dy + 28;
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", x1);
+        line.setAttribute("y1", y1);
+        line.setAttribute("x2", x2);
+        line.setAttribute("y2", y2);
+        line.setAttribute("stroke", "#92a498");
+        line.setAttribute("stroke-width", "2");
+        line.setAttribute("marker-end", "url(#arrow)");
+        edgeGroup.appendChild(line);
+
+        if (showLabels) {
+          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          label.setAttribute("x", (x1 + x2) / 2);
+          label.setAttribute("y", (y1 + y2) / 2 - 4);
+          label.setAttribute("fill", "#4f5f53");
+          label.setAttribute("font-size", "12");
+          label.setAttribute("text-anchor", "middle");
+          label.textContent = edge.label;
+          edgeGroup.appendChild(label);
+        }
+      }
+
+      svg.appendChild(edgeGroup);
+
+      const nodeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      nodeGroup.classList.add("dynamic");
+
+      for (const node of visibleNodes) {
+        const [x, y, w, h] = node.box;
+        const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        group.setAttribute("style", "cursor:pointer");
+        group.addEventListener("click", () => pickNode(node.id));
+
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", x);
+        rect.setAttribute("y", y);
+        rect.setAttribute("rx", "10");
+        rect.setAttribute("ry", "10");
+        rect.setAttribute("width", w);
+        rect.setAttribute("height", h);
+        rect.setAttribute("fill", layerColor(node.layer));
+        rect.setAttribute("stroke", activeNodeId === node.id ? "#2f7d4c" : "#90a294");
+        rect.setAttribute("stroke-width", activeNodeId === node.id ? "3" : "1.5");
+        group.appendChild(rect);
+
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        title.setAttribute("x", x + 10);
+        title.setAttribute("y", y + 24);
+        title.setAttribute("fill", "#1f2a23");
+        title.setAttribute("font-size", "14");
+        title.setAttribute("font-weight", "600");
+        title.textContent = node.label;
+        group.appendChild(title);
+
+        if (showLabels) {
+          const subtitle = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          subtitle.setAttribute("x", x + 10);
+          subtitle.setAttribute("y", y + 44);
+          subtitle.setAttribute("fill", "#5a6b5f");
+          subtitle.setAttribute("font-size", "12");
+          subtitle.textContent = node.text.slice(0, 56) + (node.text.length > 56 ? "..." : "");
+          group.appendChild(subtitle);
+        }
+
+        nodeGroup.appendChild(group);
+      }
+
+      svg.appendChild(nodeGroup);
+      updateDetails(nodes.find((node) => node.id === activeNodeId));
+    }
+
+    viewSelect.addEventListener("change", render);
+    instanceSelect.addEventListener("change", render);
+    labelsSelect.addEventListener("change", render);
+    resetBtn.addEventListener("click", () => {
+      activeNodeId = null;
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+simulation:
+  world: default
+  headless: false
+  ros_domain_id: 42
+  xrce_agent:
+    transport: udp4
+    port: 8888
+
+fleet:
+  - id: x500_1
+    instance: 1
+    px4_sys_autostart: 4001
+    px4_sim_model: gz_x500
+    pose: [0.0, 0.0, 0.2, 0.0, 0.0, 0.0]
+
+  # - id: x500_2
+  #   instance: 2
+  #   px4_sys_autostart: 4001
+  #   px4_sim_model: gz_x500
+  #   pose: [20.0, 0.0, 0.2, 0.0, 0.0, 0.0]
+  
+  # - id: x500_3
+  #   instance: 3
+  #   px4_sys_autostart: 4001
+  #   px4_sim_model: gz_x500
+  #   pose: [0.0, 20.0, 0.2, 0.0, 0.0, 0.0]
+
+  # - id: x500_4
+  #   instance: 4
+  #   px4_sys_autostart: 4001
+  #   px4_sim_model: gz_x500
+  #   pose: [20.0, 20.0, 0.2, 0.0, 0.0, 0.0]

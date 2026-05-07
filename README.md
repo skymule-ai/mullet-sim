@@ -61,6 +61,14 @@ Stop:
 ./stop.sh
 ```
 
+## Interactive Architecture Doc
+
+Open `docs/sitl_architecture.html` in a browser for an interactive overview of:
+- host startup and container orchestration flow
+- PX4 instance topology and ROS 2 offboard links
+- X500 command path using `[vx, vy, 1]`
+
+
 ## Custom code
 To add custom code (e.g. ROS 2 nodes, Gazebo plugins, etc.):
 1) Add your code to `src/` (or mount an external volume).

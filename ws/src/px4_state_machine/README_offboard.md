@@ -140,6 +140,32 @@ Override the instance list if needed:
 ros2 launch px4_state_machine lawnmower_offboard.launch.py px4_instances:=4,5,6
 ```
 
+## X500 Multicopter Offboard
+
+This repo now ships a dedicated multicopter offboard node for X500 fleets:
+- file: `scripts/x500_offboard.py`
+- launch: `x500_offboard.launch.py`
+- default config: `config/x500_offboard_params_default.yaml`
+
+State flow:
+`WARMUP_SETPOINTS -> REQUEST_OFFBOARD_ARM -> MC_TAKEOFF -> MC_HOVER -> MC_COMMAND`
+
+Command contract (current-compatible):
+- `command_topic` (`std_msgs/Float32MultiArray`)
+  - format `[vx, vy, 1]`: velocity direction request
+  - direction is normalized internally and scaled by `command_speed_mps`
+  - stale command (`cmd_timeout_s`) falls back to `MC_HOVER`
+
+Run it for X500 instances (example with instances 1 and 2):
+
+```bash
+ros2 launch px4_state_machine x500_offboard.launch.py px4_instances:=1,2
+```
+
+Per-instance config files are supported:
+- `x500_offboard_params_<instance>.yaml` under the selected `offboard_config_dir`
+- automatic fallback to `x500_offboard_params_default.yaml`
+
 ## Command Examples
 ```bash
 ros2 topic pub /request_fw std_msgs/msg/Empty "{}"
