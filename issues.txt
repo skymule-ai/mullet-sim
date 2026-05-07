@@ -1,2 +1,0 @@
-1. entrypoint.sh: no root privileges -> fix .venv permissions on host
-	chown -R $(id -u):$(id -g) .venv
