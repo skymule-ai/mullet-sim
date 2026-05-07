@@ -459,7 +459,7 @@ class VtolStateMachine(Node):
 
     def _req_mc_cb(self, _: Empty) -> None:
         self.pending_mc = True
-    
+
     def _ctrl_mode_cb(self, msg: VehicleControlMode) -> None:
         self.vehicle_ctrl_mode = msg
 
