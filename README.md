@@ -72,12 +72,14 @@ Open `docs/sitl_architecture.html` in a browser for an interactive overview of:
 ## Custom code
 To add custom code (e.g. ROS 2 nodes, Gazebo plugins, etc.):
 1) Add your code to `src/` (or mount an external volume).
-2) Clone the following repo to `src/` to get PX4 messages:
+2) Clone the following repos into `src/` to get PX4 messages and ROS 2 communication support.
+3) **Important:** if you are using PX4 v1.16.x, checkout `px4_msgs` to the `release/1.16` branch before building the workspace.
+
 ```sh
 git clone https://github.com/PX4/px4_msgs.git
 git clone https://github.com/PX4/px4_ros_com.git
+cd px4_msgs && git checkout release/1.16 && cd ..
 ```
-
 ## Configuration
 
 Fleet config is `config/drones.yaml`.
