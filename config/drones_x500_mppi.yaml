@@ -13,11 +13,11 @@ fleet:
     px4_sim_model: gz_x500
     pose: [0.0, 0.0, 0.2, 0.0, 0.0, 0.0]
 
-  # - id: x500_2
-  #   instance: 2
-  #   px4_sys_autostart: 4001
-  #   px4_sim_model: gz_x500
-  #   pose: [20.0, 0.0, 0.2, 0.0, 0.0, 0.0]
+  - id: x500_2
+    instance: 2
+    px4_sys_autostart: 4001
+    px4_sim_model: gz_x500
+    pose: [20.0, 0.0, 0.2, 0.0, 0.0, 0.0]
   
   # - id: x500_3
   #   instance: 3

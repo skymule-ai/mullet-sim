@@ -68,7 +68,11 @@ set -u
 VENV_DIR="${VENV_DIR:-/ws/venv}"
 export PYTHONPATH="${VENV_DIR}/lib/python3.10/site-packages:${PYTHONPATH:-}"
 
-touch "${VENV_DIR}/COLCON_IGNORE"
+if [[ -d "${VENV_DIR}" ]]; then
+  if ! touch "${VENV_DIR}/COLCON_IGNORE" 2>/dev/null; then
+    echo "[mullet] warning: cannot write ${VENV_DIR}/COLCON_IGNORE (check mount permissions). Continuing without it." >&2
+  fi
+fi
 
 case "${ENTRYPOINT_MODE}" in
   sitl)

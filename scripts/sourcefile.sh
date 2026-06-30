@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 
-export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+CONFIG_FILE="${CONFIG_FILE:-/config/drones.yaml}"
+config_ros_domain_id=""
+if [[ -f "${CONFIG_FILE}" ]]; then
+  config_ros_domain_id="$(
+    awk '
+      /^[[:space:]]*#/ {next}
+      /^[[:space:]]*ros_domain_id[[:space:]]*:/ {
+        value=$0
+        sub(/^[^:]*:[[:space:]]*/, "", value)
+        sub(/[[:space:]]*(#.*)?$/, "", value)
+        print value
+        exit
+      }
+    ' "${CONFIG_FILE}"
+  )"
+fi
+
+export ROS_DOMAIN_ID="${config_ros_domain_id:-${ROS_DOMAIN_ID:-0}}"
 
 if [ -n "${ROS_DISTRO:-}" ] && [ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
 	. "/opt/ros/${ROS_DISTRO}/setup.bash"

@@ -335,7 +335,7 @@ def main() -> int:
 
     # If the Agent supports domain override, keep DDS aligned to ROS_DOMAIN_ID.
     # (Agent honors this only when clients use the reserved domain id 255.)
-    env_base.setdefault("XRCE_DOMAIN_ID_OVERRIDE", str(ros_domain_id))
+    env_base["XRCE_DOMAIN_ID_OVERRIDE"] = str(ros_domain_id)
 
     runtime_dir = os.environ.get("MULLET_RUNTIME_DIR", "/tmp/runtime")
     px4_bin = _resolve_px4_bin()

@@ -84,9 +84,9 @@ done
 
 cmd_list=(
   "source /scripts/sourcefile.sh && colcon build && source /scripts/sourcefile.sh && clear && \
-  ros2 launch px4_state_machine x500_offboard.launch.py px4_instances:=1"
-  "source /scripts/sourcefile.sh && ros2 launch ergodic_mppi_ros2 ergodic_mppi_viz.launch.py px4_instances:=1 drones_config_path:=/config/drones_x500_mppi.yaml"
-  "source /scripts/sourcefile.sh && ros2 launch ergodic_mppi_ros2 ergodic_mppi.launch.py px4_instances:=1 drones_config_path:=/config/drones_x500_mppi.yaml"
+  ros2 launch mullet_core mullet_core.launch.py px4_instances:=1,2 px4_namespace_prefix:='px4'"
+  # "source /scripts/sourcefile.sh && ros2 launch ergodic_mppi_ros2 ergodic_mppi_viz.launch.py px4_instances:=1 drones_config_path:=/config/drones_x500_mppi.yaml"
+  # "source /scripts/sourcefile.sh && ros2 launch ergodic_mppi_ros2 ergodic_mppi.launch.py px4_instances:=1 drones_config_path:=/config/drones_x500_mppi.yaml"
 #   "source /scripts/sourcefile.sh && ros2 launch px4_state_machine lawnmower_offboard.launch.py"
 #   "source /scripts/sourcefile.sh && ros2 launch hedac_ros2 goal_density.launch.py"
 #   "source /scripts/sourcefile.sh && ros2 launch hedac_ros2 vtol_rviz_visualizer.launch.py"

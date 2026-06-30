@@ -9,12 +9,15 @@ services:
     restart: unless-stopped
 
     environment:
+      - QT_QPA_PLATFORM=xcb
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
       - NVIDIA_DISABLE_REQUIRE=1
+      - __NV_PRIME_RENDER_OFFLOAD=${__NV_PRIME_RENDER_OFFLOAD:-1}
+      - __VK_LAYER_NV_optimus=${__VK_LAYER_NV_OPTIMUS:-NVIDIA_only}
       # Keep GLX vendor selection automatic by default: forcing `nvidia`
       # here can break GLX context creation on some hosts or when Mesa is used.
-      # - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - __GLX_VENDOR_LIBRARY_NAME=${__GLX_VENDOR_LIBRARY_NAME:-nvidia}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=all
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
@@ -28,8 +31,7 @@ services:
       - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
       - PYTHONPATH=/ws/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages
       - ENTRYPOINT_MODE=sitl
-      # Uncomment if you have rendering issues in Gazebo
-      # - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-ogre}
+      - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-ogre2}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ./config:/config:ro
@@ -73,10 +75,13 @@ services:
     restart: unless-stopped
 
     environment:
+      - QT_QPA_PLATFORM=xcb
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
       - NVIDIA_DISABLE_REQUIRE=1
-      - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - __NV_PRIME_RENDER_OFFLOAD=${__NV_PRIME_RENDER_OFFLOAD:-1}
+      - __VK_LAYER_NV_optimus=${__VK_LAYER_NV_OPTIMUS:-NVIDIA_only}
+      - __GLX_VENDOR_LIBRARY_NAME=${__GLX_VENDOR_LIBRARY_NAME:-nvidia}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - NVIDIA_DRIVER_CAPABILITIES=all
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
@@ -90,8 +95,7 @@ services:
       - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
       - PYTHONPATH=/ws/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages
       - ENTRYPOINT_MODE=no_sitl
-      # Uncomment if you have rendering issues in Gazebo
-      # - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-ogre}
+      - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-ogre2}
     volumes:
       - ./config:/config:ro
       - ./scripts:/scripts:ro
