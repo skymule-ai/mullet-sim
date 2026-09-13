@@ -1,314 +1,233 @@
-# mullet_sitl_sim
+<p align="center">
+  <img src="docs/assets/mullet.svg" width="720" alt="MULLET">
+</p>
 
-Multi-vehicle PX4 SITL + Gazebo (GZ) launcher built around `ghcr.io/skymule-ai/px4-sitl:v1.16.1`.
+<p align="center">
+  <strong>Multi-robot PX4 SITL · Gazebo · ROS 2</strong><br>
+  One container. N vehicles. A tmux dashboard — or just <code>./run.sh</code>.
+</p>
 
-This repo focuses on:
-- One container that starts Gazebo and N PX4 instances (multi-vehicle).
-- One `MicroXRCEAgent` handling all PX4 uXRCE-DDS clients.
-- Forwarded MAVLink UDP ports so QGroundControl can connect from the host.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-4CC2FF?style=flat-square" alt="MIT"></a>
+  <img src="https://img.shields.io/badge/PX4-v1.16.1-FFB547?style=flat-square" alt="PX4">
+  <img src="https://img.shields.io/badge/ROS%202-Humble-3DDC97?style=flat-square" alt="ROS 2">
+  <img src="https://img.shields.io/badge/tmux-3.4+-8B93A7?style=flat-square" alt="tmux">
+</p>
+
+The wordmark is **FIGlet ANSI Shadow** (the same boxed letters as the TUI), without the terminal plate or shine.
+
+---
+
+## What this is
+
+MULLET launches a multi-vehicle [PX4](https://px4.io/) SITL + Gazebo (GZ) fleet from a YAML file.
+
+- One Docker container starts Gazebo, N PX4 instances, and a single `MicroXRCEAgent`.
+- The host runs tmux on socket `mullet` (`tmux -L mullet`). Detaching stops the sim unless you pass `--keep`.
+- An optional Go TUI (`./mullet`) builds the fleet, themes tmux, and lays out a live dashboard.
+- Networking is `network_mode: host` (Linux). QGroundControl auto-connects on localhost — nothing is published as forwarded UDP ports.
+
+PX4 image (public): `ghcr.io/skymule-ai/px4-sitl:v1.16.1`.
+
+ROS packages `mullet-core` and `mullet-interfaces` are **private SkyMule submodules**. You can still run PX4 + Gazebo + XRCE without them.
+
+## Contents
+
+- [Requirements](#requirements)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Architecture](#architecture)
+- [Configuration](#configuration)
+- [TUI](#tui)
+- [GPU](#gpu)
+- [ROS 2](#ros-2)
+- [Troubleshooting](#troubleshooting)
 
 ## Requirements
 
-- Linux host (PX4 multi-vehicle Gazebo support is Linux-only)
-- Docker + Docker Compose
-- `tmux`
-- Optional: X11 (`xhost`) if you want Gazebo GUI on the host
-- NVIDIA GPU (recommended): NVIDIA drivers + NVIDIA Container Toolkit for hardware-accelerated Gazebo
+| Required | Optional |
+|----------|----------|
+| Linux host | NVIDIA GPU + [NVIDIA Container Toolkit](#gpu) |
+| [Docker Engine](https://docs.docker.com/engine/install/) + Compose plugin | X11 (`xhost`) for Gazebo GUI |
+| `tmux` ≥ 3.4 (clickable TUI tabs) | Go 1.25, or Docker, to build the TUI |
+| `python3` (stdlib only on the host) | QGroundControl (`QGC_PATH` in `.env`) |
+| `git` | SkyMule org SSH (private ROS submodules) |
 
-### NVIDIA Container Toolkit
-
-If you have an NVIDIA GPU, install the NVIDIA Container Toolkit so Gazebo can use the GPU from inside the container.
-
-- Install: `sudo apt-get install -y nvidia-container-toolkit`
-- Restart Docker: `sudo systemctl restart docker`
-- Verify:
+## Install
 
 ```sh
-docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
+git clone https://github.com/skymule-ai/mullet_sitl_sim.git
+cd mullet_sitl_sim
+chmod +x setup.sh run.sh stop.sh
+./setup.sh
 ```
 
-If Gazebo is still laggy, double-check:
-- You are running an X11 session (not Wayland), or your X11 forwarding is working.
-- `nvidia-smi` works inside the container: `docker exec -it mullet_px4_sitl nvidia-smi`
+`setup.sh` checks the tools, `docker pull`s the PX4 image, copies `.env.example` → `.env`, tries `git submodule update --init`, and builds `./mullet` when it can.
 
-## Quick Start
+Set `DISPLAY` in `.env` to your X11 display (`echo $DISPLAY`). If you use QGroundControl, set `QGC_PATH`.
 
-1) Create env file (once):
+### Without org access
+
+Submodule init will fail. PX4 + Gazebo still work. Use a session like:
+
+```yaml
+session:
+  build: false
+  windows: [px4, xrce, code]
+```
+
+`core` panes and the heartbeat dashboard need the private submodules and `colcon build`.
+
+### Manual steps (same as setup.sh)
 
 ```sh
+docker pull ghcr.io/skymule-ai/px4-sitl:v1.16.1
 cp .env.example .env
+git submodule update --init          # SkyMule SSH
+tui/build.sh                         # optional → ./mullet
 ```
 
-2) Edit the fleet config:
+## Quick start
 
-- `config/drones.yaml`
-
-Container paths:
-- `./config` -> `/config`
-- `./scripts` -> `/scripts`
-- `./src` -> `/ws/src`
-- Runtime logs -> `/tmp/runtime`
-
-3) Run:
+### TUI
 
 ```sh
-./run.sh
+tui/build.sh
+./mullet
 ```
 
-Stop:
+Build the fleet (models and worlds are discovered from local PX4 images), press `L` to launch. Sessions are written to `config/sessions/<name>.yaml`.
+
+### CLI
 
 ```sh
+./run.sh --config config/sessions/example_uav.yaml
 ./stop.sh
 ```
 
-## Interactive Architecture Doc
+`run.sh --keep` leaves the simulation running after you detach. `prefix+S` or the `■ STOP` status button also stops it.
 
-Open `docs/sitl_architecture.html` in a browser for an interactive overview of:
-- host startup and container orchestration flow
-- PX4 instance topology and ROS 2 offboard links
-- X500 command path using `[vx, vy, 1]`
+Validate a config on the host:
 
-
-## Custom code
-To add custom code (e.g. ROS 2 nodes, Gazebo plugins, etc.):
-1) Add your code to `src/` (or mount an external volume).
-2) Clone the following repo to `src/` to get PX4 messages:
 ```sh
-git clone https://github.com/PX4/px4_msgs.git
-git clone https://github.com/PX4/px4_ros_com.git
+python3 scripts/spawn_fleet.py --config config/sessions/example_uav.yaml --print-env
+```
+
+Container mounts: `./config` → `/config`, `./scripts` → `/scripts`, `./ws` → `/ws`. Logs live in `/tmp/runtime`. Extra mounts: copy [`docker-compose.override.yml.example`](docker-compose.override.yml.example) to `docker-compose.override.yml` (gitignored).
+
+Interactive diagram: [`docs/sitl_architecture.html`](docs/sitl_architecture.html).
+
+## Architecture
+
+```
+host:  ./mullet | ./run.sh
+          │
+          ├─ spawn_fleet.py --print-env / --check-ports
+          ├─ docker compose up px4_sitl     (optional gpu overlay)
+          ├─ wait /tmp/runtime/ready
+          ├─ colcon build                   (if session.build)
+          └─ tmux -L mullet                 (@mullet_role panes)
+
+container: entrypoint.sh → spawn_fleet.py
+             MicroXRCEAgent
+             PX4 instance 1  ← starts Gazebo
+             PX4 instance 2  ← PX4_GZ_STANDALONE=1
+             …
 ```
 
 ## Configuration
 
-Fleet config is `config/drones.yaml`.
+Parsed by `scripts/spawn_fleet.py` (stdlib YAML subset: **no anchors, no multi-line values, no `#` inside values, no commas in inline-list items**). Canonical example: [`config/sessions/example_uav.yaml`](config/sessions/example_uav.yaml).
 
-- `simulation.world` sets `PX4_GZ_WORLD` (e.g. `default`, `windy`, `moving_platform`, `baylands`).
-- `simulation.gz_ip` sets `GZ_IP` (Gazebo transport IP). Default is `127.0.0.1`, matching `make px4_sitl ...`.
-- `simulation.headless: true` sets `HEADLESS=1` for PX4 (no Gazebo GUI).
-- `simulation.ros_domain_id` sets `ROS_DOMAIN_ID` (DDS domain for ROS 2 and uXRCE-DDS agent).
-- `simulation.xrce_agent.transport` and `simulation.xrce_agent.port` configure the MicroXRCEAgent command (default `udp4`, port `8888`).
-- `fleet[].instance` must be a unique integer `>= 0`. Any starting offset is allowed (e.g. `1,2,3` or `10,11`). Gaps are allowed but a warning is printed. The launcher always launches in ascending instance order, and the **lowest** instance starts the Gazebo server.
-- `fleet[].id` is an optional human-readable identifier (metadata only).
-- `fleet[].px4_sys_autostart` is the PX4 airframe autostart id.
-- `fleet[].px4_sim_model` is the Gazebo model name (PX4 uses `PX4_SIM_MODEL`). Example: `gz_x500`.
-- `fleet[].pose` maps to `PX4_GZ_MODEL_POSE` (`x,y,z,roll,pitch,yaw` in meters/radians).
-- For known PX4 SITL vehicles, `px4_sys_autostart` and `px4_sim_model` must match their standard pair (launcher validates this and fails fast on mismatch).
+| Key | Role |
+|-----|------|
+| `simulation.world` | `PX4_GZ_WORLD` (`default`, `windy`, `baylands`, …) |
+| `simulation.gz_ip` | Gazebo transport. Use `127.0.0.1` here |
+| `simulation.headless` | `HEADLESS=1` (no Gazebo GUI) |
+| `simulation.ros_domain_id` | DDS domain everywhere (config > shell > `.env` > 0) |
+| `simulation.namespace_prefix` | instance N → `/<prefix>_N` (else `/px4_N`) |
+| `simulation.speed_factor` | `PX4_SIM_SPEED_FACTOR` |
+| `simulation.px4_params` / `fleet[].params` | `NAME=VALUE` (not `MAV_SYS_ID` / DDS keys) |
+| `fleet[].instance` | unique integer in `[0, 254]`; **lowest** starts Gazebo |
+| `fleet[].model` | `gz_x500`, `gz_standard_vtol`, … (from the image) |
+| `fleet[].pose` | `x,y,z,roll,pitch,yaw` |
+| `session.image` | PX4 image ref |
+| `session.gpu` | `auto` \| `on` \| `off` |
+| `session.build` | run `colcon build` after the fleet is ready |
+| `session.windows` | `px4`, `xrce`, `core`, `code` |
+| `commands[]` | code-window shells; `{instances}` and `{ns_prefix}` expand |
 
-### Instance numbering and ROS 2 topic prefixes
+Vehicle and world tables: [`docs/vehicles.md`](docs/vehicles.md).
 
-PX4 maps instance numbers directly to ROS 2 topic namespaces via the uXRCE-DDS agent:
+### Isolation (MAVLink / DDS)
 
-| Instance | ROS 2 prefix |
-|----------|-------------|
-| `0` | *(no prefix)* — topics at `/fmu/...` |
-| `1` | `/px4_1/fmu/...` |
-| `N` | `/px4_N/fmu/...` |
+`MAV_SYS_ID = UXRCE_DDS_KEY = instance + 1`. Each instance binds UDP `18570+i` (GCS), `14580+i` (offboard), `14280+i` (payload), `13030+i` (gimbal). QGC sees every robot on 14550 and tells them apart by system id.
 
-For multi-robot work, **starting your fleet at instance `1`** is recommended so that every vehicle gets a named prefix (`/px4_1/...`, `/px4_2/...`) and no vehicle occupies the ambiguous unprefixed namespace.
+Instances above 9 share PX4's offboard remote port (14549). `run.sh` refuses to start if those UDP ports are already taken on the host.
 
-## Supported Vehicle Models
+### ROS 2 namespaces
 
-PX4 Gazebo simulation supports a variety of vehicle types. Reference the full list from [PX4 Gazebo Documentation](https://docs.px4.io/main/en/sim_gazebo_gz/).
+| Instance | Prefix |
+|----------|--------|
+| `0` | none — `/fmu/...` |
+| `N` without `namespace_prefix` | `/px4_N/fmu/...` |
+| `N` with `namespace_prefix: uav` | `/uav_N/...` |
 
-### Multicopters
+Start fleets at instance `1` so no vehicle occupies the unprefixed namespace.
 
-| Vehicle | Model Name | Autostart ID |
-|---------|-----------|--------------|
-| Quadrotor (X500) | `gz_x500` | 4001 |
-| X500 with Depth Camera (Front) | `gz_x500_depth` | 4002 |
-| X500 with Vision Odometry | `gz_x500_vision` | 4005 |
-| X500 with 1D LIDAR (Down-facing) | `gz_x500_lidar_down` | 4016 |
-| X500 with 2D LIDAR | `gz_x500_lidar_2d` | 4013 |
-| X500 with 1D LIDAR (Front-facing) | `gz_x500_lidar_front` | 4017 |
-| X500 with Gimbal (Front-facing) | `gz_x500_gimbal` | 4019 |
+### Custom ROS 2 code
 
-### Fixed-Wing Aircraft
+Add packages under `ws/src/` (or an override mount). Optional PX4 ROS deps (gitignored):
 
-| Vehicle | Model Name | Autostart ID |
-|---------|-----------|--------------|
-| Plane (RC Cessna) | `gz_rc_cessna` | 4003 |
-| Advanced Plane | `gz_advanced_plane` | 4008 |
-
-### VTOL (Vertical Takeoff & Landing)
-
-| Vehicle | Model Name | Autostart ID |
-|---------|-----------|--------------|
-| Standard VTOL | `gz_standard_vtol` | 4004 |
-| Quad Tailsitter VTOL | `gz_quadtailsitter` | 4018 |
-| Tiltrotor VTOL | `gz_tiltrotor` | 4020 |
-
-### Rovers
-
-| Vehicle | Model Name | Autostart ID |
-|---------|-----------|--------------|
-| Differential Rover | `gz_rover_differential` | 50000 |
-| Ackermann Rover | `gz_rover_ackermann` | 51000 |
-| Mecanum Rover | `gz_rover_mecanum` | 52000 |
-| Zero Turn Lawnmower | `gz_lawnmower` | 4011 |
-
-### Available Simulation Worlds
-
-The simulation supports multiple worlds. Specify a world using the `simulation.world` config or by appending `_<world>` to model names:
-
-| World | Description |
-|-------|------------|
-| `default` | Empty world (grey plane) |
-| `aruco` | Empty world with ArUco marker for precision landing testing |
-| `baylands` | Baylands world surrounded by water |
-| `lawn` | Lawn world for testing rovers |
-| `rover` | Rover world (optimized for rover testing) |
-| `walls` | Wall world for collision prevention testing |
-| `windy` | Empty world with wind enabled |
-| `moving_platform` | World with moving takeoff/landing platform |
-
-**Note:** Do not explicitly specify `_default` on model names as this will prevent PX4 from launching.
-
-### Example Configuration
-
-Single VTOL baseline — instance 0 (matches `make px4_sitl gz_standard_vtol` behavior, unprefixed ROS topics):
-
-```yaml
-simulation:
-  world: default
-  gz_ip: 127.0.0.1
-  headless: false
-
-fleet:
-  - instance: 0
-    px4_sys_autostart: 4004
-    px4_sim_model: gz_standard_vtol
-    pose: [0, 0, 0.1, 0, 0, 0]
+```sh
+git clone https://github.com/PX4/px4_msgs.git ws/src/px4_msgs
+git clone https://github.com/PX4/px4_ros_com.git ws/src/px4_ros_com
 ```
 
-Single VTOL baseline — instance 1 (ROS 2 topics under `/px4_1/...`):
+Persisted PX4 params can mask airframe defaults: `MULLET_RESET_PARAMS=1 ./run.sh`. Force a PX4 rebuild with `MULLET_PX4_REBUILD=1`.
 
-```yaml
-simulation:
-  world: default
-  gz_ip: 127.0.0.1
-  headless: false
+## TUI
 
-fleet:
-  - instance: 1
-    px4_sys_autostart: 4004
-    px4_sim_model: gz_standard_vtol
-    pose: [0, 0, 0.1, 0, 0, 0]
+```
+tui/build.sh              # ./mullet (local Go, or golang Docker image)
+tui/build.sh test ./...
+./mullet
 ```
 
-Multi-vehicle example starting at instance 1 (topics: `/px4_1/...`, `/px4_2/...`):
+Sessions: `config/sessions/<name>.yaml`. Settings and layouts: `~/.config/mullet-sitl/`. Package map: [`tui/README.md`](tui/README.md).
 
-```yaml
-simulation:
-  world: windy
-  gz_ip: 127.0.0.1
-  headless: false
+Every block (PX4, CORE, XRCE, CODE, …) keeps its panes in its own tmux window. The dashboard next to the TUI shows read-only mirrors of the ones you pick. Status bar: `PX4 ▾ 1 2 3 ⊞` — `▾` picker, chips toggle mirrors, `⊞` / `M-v` single vs multi, `M-1..9` jump to robot N, `■ STOP` always visible. Layout editor: `l`. Themes: Mullet Dusk, Aviation HUD, Catppuccin Mocha.
 
-fleet:
-  - instance: 1
-    px4_sys_autostart: 4001
-    px4_sim_model: gz_x500
-    pose: [0, 0, 0, 0, 0, 0]
-  - instance: 2
-    px4_sys_autostart: 4004
-    px4_sim_model: gz_standard_vtol
-    pose: [5, 0, 0, 0, 0, 0]
+## GPU
+
+`run.sh` adds [`docker-compose.gpu.yml`](docker-compose.gpu.yml) when `session.gpu` is `on`, or `auto` and `nvidia-smi` works.
+
+```sh
+sudo apt-get install -y nvidia-container-toolkit
+sudo systemctl restart docker
+docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
 ```
 
-Mixed VTOL + lawnmower example (sequential instances, lawn world):
+If Gazebo is still laggy: prefer an X11 session (not Wayland), and check `docker exec -it mullet_px4_sitl nvidia-smi`.
 
-```yaml
-simulation:
-  world: lawn
-  gz_ip: 127.0.0.1
-  headless: false
+## ROS 2
 
-fleet:
-  - instance: 1
-    px4_sys_autostart: 4004
-    px4_sim_model: gz_standard_vtol
-    pose: [0, 0, 0.1, 0, 0, 0]
-  - instance: 2
-    px4_sys_autostart: 4004
-    px4_sim_model: gz_standard_vtol
-    pose: [5, 0, 0.1, 0, 0, 0]
-  - instance: 3
-    px4_sys_autostart: 4011
-    px4_sim_model: gz_lawnmower
-    pose: [10, -5, 0, 0, 0, 0]
-  - instance: 4
-    px4_sys_autostart: 4011
-    px4_sim_model: gz_lawnmower
-    pose: [15, -5, 0, 0, 0, 0]
-```
+Set `ROS_DOMAIN_ID` in `.env` (overridden by `simulation.ros_domain_id`). The agent is `MicroXRCEAgent udp4 -p 8888` inside the SITL container. `XRCE_DOMAIN_ID_OVERRIDE` tracks the same domain.
 
-### Airframe / Parameter Refresh
+Non-interactive `bash -c` in the container must `source /scripts/sourcefile.sh` — the image `.bashrc` returns early for non-interactive shells.
 
-PX4 persists per-instance parameters under `.../rootfs/<instance>/parameters*.bson`.
-After airframe default changes (for example in `4011_gz_lawnmower`), those persisted files can mask new defaults.
+## Troubleshooting
 
-- Run once with `MULLET_RESET_PARAMS=1 ./run.sh` to reset persisted params for launched instances.
-- Keep `MULLET_RESET_PARAMS=0` (default) for normal runs to preserve tuned state.
-- Optional: set `MULLET_PX4_REBUILD=1 ./run.sh` to force `make px4_sitl_default` during entrypoint startup.
+| Symptom | What to try |
+|---------|-------------|
+| `docker pull` denied | The PX4 image should be public. Check the tag in `session.image`. |
+| Gazebo / RViz blank | `DISPLAY` in `.env` matches `echo $DISPLAY`; `xhost +local:docker` |
+| GPU overlay missing | `nvidia-smi` on the host; `session.gpu: on` |
+| `colcon` / CORE missing | Private submodules: org SSH, or `build: false` and drop `core` from `windows` |
+| Port error on start | Another SITL/agent still bound; `./stop.sh`, then retry |
+| TUI tabs not clickable | tmux ≥ 3.4 |
+| Detach killed the sim | `./run.sh --keep`, then `tmux -L mullet attach -t mullet` |
 
-## MAVLink Ports (Host)
+## License
 
-This setup uses `network_mode: host` (Linux) so PX4's default SITL MAVLink
-configuration (bound to localhost) works with QGroundControl on the host.
-
-QGroundControl should auto-connect without any manual comm link.
-
-Note: PX4 still prints `MAVLink only on localhost ...` in this configuration, but
-that is fine with host networking because `127.0.0.1` is shared with the host.
-
-## ROS 2 / DDS
-
-- Set `ROS_DOMAIN_ID` in `.env`.
-- External ROS 2 containers need the same `ROS_DOMAIN_ID` and must be able to reach the SITL container network.
-
-Notes:
-- The uXRCE agent is started inside the SITL container (`MicroXRCEAgent udp4 -p 8888`).
-- We export `XRCE_DOMAIN_ID_OVERRIDE` to keep the agent's DDS domain aligned with `ROS_DOMAIN_ID` when supported.
-
-In PX4 multi-vehicle ROS 2 setups you should see topics like:
-- `/px4_1/...` (instance 1)
-- `/px4_2/...` (instance 2)
-
-If you use instance 0, that vehicle's topics appear unprefixed at the root (e.g. `/fmu/out/vehicle_local_position`).
-
-## Environment Variables (Launcher)
-
-These are consumed or set by `scripts/spawn_fleet.py`.
-
-### Launcher-level
-
-- `MULLET_RUNTIME_DIR` (default `/tmp/runtime`): log directory for `px4_<instance>.log` and `xrce_agent.log`.
-- `ROS_DOMAIN_ID`: DDS domain for ROS 2 and the uXRCE-DDS agent (overridden by `simulation.ros_domain_id` when set).
-- `GZ_IP`: Gazebo transport IP. Precedence: existing `GZ_IP` > `simulation.gz_ip` > `127.0.0.1`.
-- `XRCE_DOMAIN_ID_OVERRIDE`: defaults to `ROS_DOMAIN_ID` to keep the agent domain aligned when supported.
-- `PX4_BIN` (default `px4`): PX4 binary to execute.
-- `PX4_GZ_SIM_RENDER_ENGINE`: optional renderer override (pass-through if set).
-
-### Per-vehicle PX4/Gazebo variables
-
-- `PX4_SYS_AUTOSTART` from `fleet[].px4_sys_autostart`.
-- `PX4_SIM_MODEL` from `fleet[].px4_sim_model`.
-- `PX4_GZ_WORLD` from `simulation.world`.
-- `PX4_GZ_MODEL_POSE` from `fleet[].pose`.
-- `HEADLESS=1` when `simulation.headless: true`.
-- `PX4_GZ_STANDALONE=1` for all but the first-launched instance (lowest instance starts `gz-server`).
-
-### PX4 parameter overrides (enforced defaults)
-
-These parameters are set via environment variables for predictable SITL behavior. Update `scripts/spawn_fleet.py` if you need different values.
-
-- `PX4_PARAM_COM_RC_IN_MODE=4`
-- `PX4_PARAM_NAV_RCL_ACT=2`
-- `PX4_PARAM_NAV_DLL_ACT=0`
-- `PX4_PARAM_COM_DL_LOSS_T=300`
-- `PX4_PARAM_COM_RC_LOSS_T=300`
-
-## Future Work
-
-- MAVLink router / forwarding rules to match real-drone networking.
-- Replace the minimal YAML parser with PyYAML (or embed config in JSON) once the container has the dependency.
-- Add a `tmuxinator` config generator (currently we use plain tmux).
+[MIT](LICENSE)
