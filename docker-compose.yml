@@ -1,28 +1,23 @@
+# Base services. run.sh adds docker-compose.gpu.yml (NVIDIA hosts) and, if present,
+# docker-compose.override.yml (your local extra mounts, gitignored).
 services:
   px4_sitl:
-    image: ghcr.io/skymule-ai/px4-sitl:v1.16.1
+    image: ${PX4_SITL_IMAGE:-ghcr.io/skymule-ai/px4-sitl:v1.16.1}
     container_name: mullet_px4_sitl
     privileged: true
     shm_size: "2g"
     stdin_open: true
     tty: true
-    restart: unless-stopped
+    # Lifecycle is owned by run.sh / stop.sh (no auto-restart after reboot).
+    restart: "no"
 
     environment:
       - QT_QPA_PLATFORM=xcb
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
-      - NVIDIA_DISABLE_REQUIRE=1
-      - __NV_PRIME_RENDER_OFFLOAD=${__NV_PRIME_RENDER_OFFLOAD:-1}
-      - __VK_LAYER_NV_optimus=${__VK_LAYER_NV_OPTIMUS:-NVIDIA_only}
-      # Keep GLX vendor selection automatic by default: forcing `nvidia`
-      # here can break GLX context creation on some hosts or when Mesa is used.
-      - __GLX_VENDOR_LIBRARY_NAME=${__GLX_VENDOR_LIBRARY_NAME:-nvidia}
-      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
-      - NVIDIA_DRIVER_CAPABILITIES=all
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
-      - CONFIG_FILE=${CONFIG_FILE:-/config/drones_x500_mppi.yaml}
+      - CONFIG_FILE=${CONFIG_FILE:-/config/drones.yaml}
       - WORKSPACE_DIR=/ws
       - MULLET_RUNTIME_DIR=/tmp/runtime
       - PX4_BIN=${PX4_BIN:-/opt/PX4-Autopilot/build/px4_sitl_default/bin/px4}
@@ -37,11 +32,6 @@ services:
       - ./config:/config:ro
       - ./scripts:/scripts:ro
       - ./ws:/ws:rw
-      - ./.venv:/ws/venv              # mount the venv explicitly (or covered by above)
-      # NVIDIA libs (EGL, GLX) are injected automatically by
-      # nvidia-container-toolkit >= 1.14. Only the Vulkan ICD needs
-      # an explicit mount since the container image lacks it.
-      - /usr/share/vulkan/icd.d/nvidia_icd.json:/usr/share/vulkan/icd.d/nvidia_icd.json:ro
     tmpfs:
       - /tmp/runtime:uid=1000,gid=1000,mode=1777
     working_dir: /ws
@@ -49,13 +39,8 @@ services:
       resources:
         limits:
           memory: 8g
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     entrypoint: ["/usr/bin/env", "bash", "/scripts/entrypoint.sh"]
-    
+
     # Host networking is the most reliable way to make QGroundControl work
     # with PX4 SITL in Docker, because PX4's default MAVLink config is bound
     # to localhost for SITL.
@@ -66,7 +51,7 @@ services:
     network_mode: host
 
   px4_no_sitl:
-    image: ghcr.io/skymule-ai/px4-sitl:v1.16.1
+    image: ${PX4_SITL_IMAGE:-ghcr.io/skymule-ai/px4-sitl:v1.16.1}
     container_name: mullet_px4_no_sitl
     privileged: true
     shm_size: "2g"
@@ -78,15 +63,9 @@ services:
       - QT_QPA_PLATFORM=xcb
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
-      - NVIDIA_DISABLE_REQUIRE=1
-      - __NV_PRIME_RENDER_OFFLOAD=${__NV_PRIME_RENDER_OFFLOAD:-1}
-      - __VK_LAYER_NV_optimus=${__VK_LAYER_NV_OPTIMUS:-NVIDIA_only}
-      - __GLX_VENDOR_LIBRARY_NAME=${__GLX_VENDOR_LIBRARY_NAME:-nvidia}
-      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
-      - NVIDIA_DRIVER_CAPABILITIES=all
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
-      - CONFIG_FILE=/config/drones.yaml
+      - CONFIG_FILE=${CONFIG_FILE:-/config/drones.yaml}
       - WORKSPACE_DIR=/ws
       - MULLET_RUNTIME_DIR=/tmp/runtime
       - PX4_BIN=${PX4_BIN:-/opt/PX4-Autopilot/build/px4_sitl_default/bin/px4}
@@ -100,7 +79,6 @@ services:
       - ./config:/config:ro
       - ./scripts:/scripts:ro
       - ./ws:/ws:rw
-      - ./.venv:/ws/venv              # mount the venv explicitly (or covered by above)
     tmpfs:
       - /tmp/runtime:uid=1000,gid=1000,mode=1777
     working_dir: /ws
@@ -108,10 +86,5 @@ services:
       resources:
         limits:
           memory: 8g
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     entrypoint: ["/usr/bin/env", "bash", "/scripts/entrypoint.sh"]
     network_mode: host

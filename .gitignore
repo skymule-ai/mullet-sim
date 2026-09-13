@@ -1,9 +1,15 @@
+# Product (keep these obvious)
+/mullet
+.env
+docker-compose.override.yml
+config/sessions/*.yaml
+!config/sessions/example_uav.yaml
 ws/build/
 ws/install/
 ws/log/
+ws/bags/
 ws/src/px4_ros_com/
 ws/src/px4_msgs/
-.env
 
 ##################################
 

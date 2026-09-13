@@ -1,0 +1,8 @@
+# Copy to docker-compose.override.yml (gitignored) for local mounts.
+# run.sh adds this file automatically when it exists.
+#
+# services:
+#   px4_sitl:
+#     volumes:
+#       - /path/to/extra/pkg:/ws/src/extra_pkg:rw
+#       - ./ws/venv:/ws/venv:rw

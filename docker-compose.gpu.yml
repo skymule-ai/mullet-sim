@@ -1,0 +1,42 @@
+# NVIDIA GPU support (needs the NVIDIA Container Toolkit).
+# run.sh adds this file when session.gpu is 'on', or 'auto' and nvidia-smi works.
+# Manual use: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d px4_no_sitl
+services:
+  px4_sitl:
+    environment:
+      - NVIDIA_DISABLE_REQUIRE=1
+      - __NV_PRIME_RENDER_OFFLOAD=${__NV_PRIME_RENDER_OFFLOAD:-1}
+      - __VK_LAYER_NV_optimus=${__VK_LAYER_NV_OPTIMUS:-NVIDIA_only}
+      # Keep GLX vendor selection automatic by default: forcing `nvidia`
+      # here can break GLX context creation on some hosts or when Mesa is used.
+      - __GLX_VENDOR_LIBRARY_NAME=${__GLX_VENDOR_LIBRARY_NAME:-nvidia}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      # NVIDIA libs (EGL, GLX) are injected automatically by
+      # nvidia-container-toolkit >= 1.14. Only the Vulkan ICD needs
+      # an explicit mount since the container image lacks it.
+      - /usr/share/vulkan/icd.d/nvidia_icd.json:/usr/share/vulkan/icd.d/nvidia_icd.json:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  px4_no_sitl:
+    environment:
+      - NVIDIA_DISABLE_REQUIRE=1
+      - __NV_PRIME_RENDER_OFFLOAD=${__NV_PRIME_RENDER_OFFLOAD:-1}
+      - __VK_LAYER_NV_optimus=${__VK_LAYER_NV_OPTIMUS:-NVIDIA_only}
+      - __GLX_VENDOR_LIBRARY_NAME=${__GLX_VENDOR_LIBRARY_NAME:-nvidia}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

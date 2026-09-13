@@ -1,26 +1,45 @@
 #!/usr/bin/env bash
+# Launch the SITL fleet described by a fleet/session YAML and open the tmux view.
+# Validates the config, pulls up mullet_px4_sitl, waits for /tmp/runtime/ready,
+# optionally runs colcon, then tags host tmux panes. Detaching runs ./stop.sh
+# unless --keep. The TUI (./mullet) calls this with --no-attach.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${script_dir}"
 
+usage() {
+  cat <<'EOF'
+Usage: ./run.sh [--config PATH] [--no-attach] [--keep]
+
+  --config PATH  fleet/session YAML under config/ (default: $CONFIG_PATH or config/drones.yaml)
+  --no-attach    set everything up without attaching to tmux (used by the TUI)
+  --keep         keep the simulation running after you detach from tmux
+EOF
+}
+
 CONFIG_PATH="${CONFIG_PATH:-config/drones.yaml}"
 TMUX_CONF_PATH="${TMUX_CONF_PATH:-config/tmux.conf}"
+ATTACH=1
+KEEP=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config) CONFIG_PATH="${2:?--config needs a path}"; shift 2 ;;
+    --no-attach) ATTACH=0; shift ;;
+    --keep) KEEP=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+
 CONFIG_DIR="${script_dir}/config"
-
-# Allow Gazebo GUI from container.
-if command -v xhost >/dev/null 2>&1; then
-  xhost +local:docker >/dev/null 2>&1 || true
-fi
-
-if [[ ! -f .env ]]; then
-  cp .env.example .env
-fi
-
-SESSION_NAME="mullet_sitl"
 CONTAINER_NAME="mullet_px4_sitl"
-TMUX_CONF_IN_CONTAINER="/config/tmux.conf"
 RUNTIME_DIR_IN_CONTAINER="/tmp/runtime"
+TMUX_SOCKET="mullet"
+SESSION_NAME="mullet"
+# Robot identity colors (Mullet Dusk), indexed by instance; the TUI re-applies its theme.
+ROBOT_COLORS=("#4CC2FF" "#FFB547" "#B18CFF" "#3DDC97" "#FF7AB6" "#FF8F5A" "#6C9CFF" "#C6E86B")
+MUTED_COLOR="#8B93A7"
 
 if [[ ! -f "${CONFIG_PATH}" ]]; then
   echo "Config file not found: ${CONFIG_PATH}" >&2
@@ -35,92 +54,216 @@ if [[ "${config_path_abs}" != "${config_dir_abs}/"* ]]; then
   exit 1
 fi
 
-config_relative_path="${config_path_abs#${config_dir_abs}/}"
-config_path_in_container="/config/${config_relative_path}"
+export CONFIG_FILE="/config/${config_path_abs#"${config_dir_abs}"/}"
 
-CONFIG_FILE="${config_path_in_container}" docker compose up -d px4_sitl
+# Validate the config and load it as MULLET_* variables (single parser: spawn_fleet.py).
+config_env="$(python3 scripts/spawn_fleet.py --config "${CONFIG_PATH}" --print-env)"
+eval "${config_env}"
+read -r -a INSTANCES <<< "${MULLET_INSTANCES}"
 
-if ! docker exec "${CONTAINER_NAME}" tmux -V >/dev/null 2>&1; then
-  echo "tmux not found in container ${CONTAINER_NAME}" >&2
-  exit 1
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+fi
+env_file_value() { sed -n "s/^$1=//p" .env | tail -n 1; }
+
+# One ROS_DOMAIN_ID for everything (container, agent, PX4, every pane):
+# config > shell env > .env > 0. The shell env also wins over .env inside compose.
+export ROS_DOMAIN_ID="${MULLET_ROS_DOMAIN_ID:-${ROS_DOMAIN_ID:-$(env_file_value ROS_DOMAIN_ID)}}"
+export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+if [[ -n "${MULLET_IMAGE}" ]]; then export PX4_SITL_IMAGE="${MULLET_IMAGE}"; fi
+if [[ -n "${MULLET_RMW}" ]]; then export RMW_IMPLEMENTATION="${MULLET_RMW}"; fi
+if [[ -n "${MULLET_RESET_PARAMS:-}" ]]; then export MULLET_RESET_PARAMS; fi
+
+compose=(docker compose -f docker-compose.yml)
+gpu="${MULLET_GPU:-auto}"
+if [[ "${gpu}" == on ]] || { [[ "${gpu}" == auto ]] && nvidia-smi >/dev/null 2>&1; }; then
+  compose+=(-f docker-compose.gpu.yml)
+fi
+if [[ -f docker-compose.override.yml ]]; then
+  compose+=(-f docker-compose.override.yml)
 fi
 
-docker exec "${CONTAINER_NAME}" tmux kill-server >/dev/null 2>&1 || true
+container_running() {
+  [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER_NAME}" 2>/dev/null)" == true ]]
+}
 
-tmux_base_cmd=(docker exec "${CONTAINER_NAME}" tmux)
-tmux_start_cmd=("${tmux_base_cmd[@]}")
-if [[ -f "${TMUX_CONF_PATH}" ]]; then
-  tmux_start_cmd=("${tmux_base_cmd[@]}" -f "${TMUX_CONF_IN_CONTAINER}")
+# Host networking: a stray SITL or agent would silently collide with the fleet's ports.
+# Our own running container is recreated below, so its ports don't count.
+if ! container_running; then
+  python3 scripts/spawn_fleet.py --config "${CONFIG_PATH}" --check-ports
 fi
 
-mapfile -t INSTANCES < <(
-  awk '($0 !~ /^[[:space:]]*#/) && ($1=="instance:") {print $2}' "${CONFIG_PATH}" | sort -n
-)
-
-if [[ ${#INSTANCES[@]} -eq 0 ]]; then
-  echo "No instance entries found in ${CONFIG_PATH}" >&2
-  exit 1
+# Allow Gazebo/RViz GUI from container.
+if command -v xhost >/dev/null 2>&1; then
+  xhost +local:docker >/dev/null 2>&1 || true
 fi
 
-drone_count="${#INSTANCES[@]}"
-echo "[mullet] config: ${config_path_abs} -> ${config_path_in_container}"
-echo "[mullet] detected ${drone_count} drone instance(s): ${INSTANCES[*]}"
-first_inst="${INSTANCES[0]}"
+echo "[mullet] config: ${config_path_abs} -> ${CONFIG_FILE}"
+echo "[mullet] instances: ${MULLET_INSTANCES} | namespace: /${MULLET_NS_PREFIX}_<N> | ROS_DOMAIN_ID=${ROS_DOMAIN_ID} | gpu: ${gpu}"
 
-# Window "px4": PX4 logs (one pane per instance)
-"${tmux_start_cmd[@]}" new-session -d -s "${SESSION_NAME}" -n "px4" \
-  "bash -lc 'sleep 2; tail -n 200 -F ${RUNTIME_DIR_IN_CONTAINER}/px4_${first_inst}.log'"
+# Always a fresh container: processes started with `docker exec` outlive their tmux panes.
+"${compose[@]}" up -d --force-recreate px4_sitl
 
-for inst in "${INSTANCES[@]:1}"; do
-  "${tmux_base_cmd[@]}" split-window -t "${SESSION_NAME}:px4" \
-    "bash -lc 'sleep 2; tail -n 200 -F ${RUNTIME_DIR_IN_CONTAINER}/px4_${inst}.log'"
-  "${tmux_base_cmd[@]}" select-layout -t "${SESSION_NAME}:px4" tiled
+echo "[mullet] waiting for the PX4 fleet to start..."
+max_wait=180
+if [[ "${MULLET_PX4_REBUILD:-0}" =~ ^(1|true|yes|on)$ ]]; then max_wait=1800; fi
+for ((waited = 0; ; waited++)); do
+  if docker exec "${CONTAINER_NAME}" test -f "${RUNTIME_DIR_IN_CONTAINER}/ready" 2>/dev/null; then
+    break
+  fi
+  if ! container_running || ((waited >= max_wait)); then
+    echo "[mullet] the fleet did not start; container logs:" >&2
+    docker logs --tail 40 "${CONTAINER_NAME}" >&2 || true
+    exit 1
+  fi
+  sleep 1
 done
+echo "[mullet] fleet started"
 
-# Window "xrce": MicroXRCEAgent log
-"${tmux_base_cmd[@]}" new-window -d -t "${SESSION_NAME}" -n "xrce" \
-  "bash -lc 'sleep 2; tail -n 200 -F ${RUNTIME_DIR_IN_CONTAINER}/xrce_agent.log'"
+if [[ "${MULLET_BUILD}" == 1 ]]; then
+  echo "[mullet] building the ROS 2 workspace (colcon build)..."
+  if ! docker exec -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" "${CONTAINER_NAME}" \
+    bash -c "source /scripts/sourcefile.sh && cd /ws && colcon build"; then
+    echo "[mullet] colcon build failed; the simulation is still running (./stop.sh to stop it)" >&2
+    exit 1
+  fi
+fi
 
+# ---- tmux (host, dedicated socket so your own tmux is untouched) ----
+tmx() { tmux -L "${TMUX_SOCKET}" "$@"; }
 
-cmd_list=(
-  "source /scripts/sourcefile.sh && colcon build && source /scripts/sourcefile.sh && clear && \
-  ros2 launch mullet_core mullet_core.launch.py px4_instances:=1,2 px4_namespace_prefix:='px4'"
-  # "source /scripts/sourcefile.sh && ros2 launch ergodic_mppi_ros2 ergodic_mppi_viz.launch.py px4_instances:=1 drones_config_path:=/config/drones_x500_mppi.yaml"
-  # "source /scripts/sourcefile.sh && ros2 launch ergodic_mppi_ros2 ergodic_mppi.launch.py px4_instances:=1 drones_config_path:=/config/drones_x500_mppi.yaml"
-#   "source /scripts/sourcefile.sh && ros2 launch px4_state_machine lawnmower_offboard.launch.py"
-#   "source /scripts/sourcefile.sh && ros2 launch hedac_ros2 goal_density.launch.py"
-#   "source /scripts/sourcefile.sh && ros2 launch hedac_ros2 vtol_rviz_visualizer.launch.py"
-#   "source /scripts/sourcefile.sh && ros2 launch hedac_ros2 hedac_px4.launch.py"
-#   "source /scripts/sourcefile.sh && ros2 launch moe_gp moe_gp_px4.launch.py"
-)
-execute_cmds=("0")  # Indices of commands to execute immediately
+# Panes run in the container. Interactive shells source /scripts/sourcefile.sh via ~/.bashrc.
+docker_exec() { printf 'docker exec -it -e ROS_DOMAIN_ID=%q %s %s' "${ROS_DOMAIN_ID}" "${CONTAINER_NAME}" "$1"; }
+tail_cmd() { docker_exec "tail -n 200 -F ${RUNTIME_DIR_IN_CONTAINER}/$1"; }
+robot_color() { echo "${ROBOT_COLORS[($1 + 7) % 8]}"; }
+ns_label() { if [[ "$1" == 0 ]]; then echo "instance 0"; else echo "/${MULLET_NS_PREFIX}_$1"; fi; }
+has_window() { [[ " ${MULLET_WINDOWS} " == *" $1 "* ]]; }
 
-# Window "shell": interactive shell inside container (one pane per drone)
-shell_pane_id="$("${tmux_base_cmd[@]}" new-window -d -P -F "#{pane_id}" -t "${SESSION_NAME}" -n "shell" bash)"
+# Remove panes from a previous run. Panes without a role (the TUI) stay.
+tmx list-panes -s -t "${SESSION_NAME}" -F '#{pane_id} #{@mullet_role}' 2>/dev/null |
+  awk '$2 != "" {print $1}' | while read -r id; do tmx kill-pane -t "${id}" || true; done || true
 
-# Create additional panes so shell pane count matches drone count.
-for ((i = 1; i < ${#cmd_list[@]}; i++)); do
-  "${tmux_base_cmd[@]}" split-window -d -t "${SESSION_NAME}:shell" bash
-  "${tmux_base_cmd[@]}" select-layout -t "${SESSION_NAME}:shell" tiled
-done
-
-# For every command in the list, send it to a different pane in the "shell" window with Enter flag to execute immediately.
-for i in "${!cmd_list[@]}"; do
-  pane_id="$("${tmux_base_cmd[@]}" list-panes -t "${SESSION_NAME}:shell" -F "#{pane_id}" | sed -n "$((i + 1))p")"
-  if [[ " ${execute_cmds[@]} " =~ " $i " ]]; then
-    "${tmux_base_cmd[@]}" send-keys -t "${pane_id}" "${cmd_list[$i]}" Enter
+# add_pane WINDOW ROLE LABEL COLOR CMD [KEYS [ENTER]]
+# Adds a pane to WINDOW (creating the window/session as needed), tags it for the TUI and
+# queues KEYS to be typed into it (pressing Enter unless ENTER=0).
+pending_panes=()
+pending_keys=()
+pending_enter=()
+add_pane() {
+  local window="$1" role="$2" label="$3" color="$4" cmd="$5" keys="${6:-}" enter="${7:-1}" id
+  if tmx list-panes -t "${SESSION_NAME}:=${window}" >/dev/null 2>&1; then
+    id="$(tmx split-window -d -P -F '#{pane_id}' -t "${SESSION_NAME}:=${window}" "${cmd}")"
+    tmx select-layout -t "${SESSION_NAME}:=${window}" tiled >/dev/null
+  elif tmx has-session -t "${SESSION_NAME}" 2>/dev/null; then
+    id="$(tmx new-window -d -P -F '#{pane_id}' -t "${SESSION_NAME}:" -n "${window}" "${cmd}")"
   else
-    "${tmux_base_cmd[@]}" send-keys -t "${pane_id}" "${cmd_list[$i]}"
+    id="$(tmx -f "${TMUX_CONF_PATH}" new-session -d -P -F '#{pane_id}' -s "${SESSION_NAME}" \
+      -n "${window}" -x 200 -y 60 "${cmd}")"
+  fi
+  tmx set -p -t "${id}" @mullet_role "${role}"
+  tmx set -p -t "${id}" @mullet_label "${label}"
+  tmx set -p -t "${id}" @mullet_color "${color}"
+  if [[ "${role}" == code:* ]]; then
+    tmx set -p -t "${id}" remain-on-exit off
+  fi
+  if [[ -n "${keys}" ]]; then
+    pending_panes+=("${id}")
+    pending_keys+=("${keys}")
+    pending_enter+=("${enter}")
+  fi
+}
+
+if has_window px4; then
+  for inst in "${INSTANCES[@]}"; do
+    add_pane px4 "px4:${inst}" "PX4 · $(ns_label "${inst}")" "$(robot_color "${inst}")" "$(tail_cmd "px4_${inst}.log")"
+  done
+fi
+
+if has_window xrce; then
+  add_pane xrce xrce:0 "XRCE agent" "${MUTED_COLOR}" "$(tail_cmd xrce_agent.log)"
+fi
+
+if has_window core; then
+  for inst in "${INSTANCES[@]}"; do
+    add_pane core "core:${inst}" "CORE · $(ns_label "${inst}")" "$(robot_color "${inst}")" "$(docker_exec bash)" \
+      "ros2 launch mullet_core mullet_core.launch.py px4_instances:=${inst} px4_namespace_prefix:=${MULLET_NS_PREFIX}"
+  done
+fi
+
+if has_window code; then
+  if ((MULLET_CMD_COUNT == 0)); then
+    add_pane code code:0 "CODE" "${MUTED_COLOR}" "$(docker_exec bash)"
+  fi
+  for ((i = 0; i < MULLET_CMD_COUNT; i++)); do
+    cmd_var="MULLET_CMD_${i}"
+    autorun_var="MULLET_CMD_${i}_AUTORUN"
+    add_pane code "code:${i}" "CODE · $((i + 1))" "${MUTED_COLOR}" "$(docker_exec bash)" "${!cmd_var}" "${!autorun_var}"
+  done
+fi
+
+if [[ "${MULLET_RVIZ}" == 1 ]]; then
+  rviz_cmd="rviz2"
+  if [[ -n "${MULLET_RVIZ_CONFIG}" ]]; then rviz_cmd+=" -d ${MULLET_RVIZ_CONFIG}"; fi
+  add_pane rviz rviz "RViz2" "${MUTED_COLOR}" "$(docker_exec bash)" "${rviz_cmd}"
+fi
+
+if [[ "${MULLET_FOXGLOVE}" == 1 ]]; then
+  add_pane fox fox "Foxglove bridge" "${MUTED_COLOR}" "$(docker_exec bash)" \
+    "ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
+fi
+
+if [[ "${MULLET_BAG}" == 1 ]]; then
+  bag_dir="/ws/bags/${MULLET_SESSION}_$(date +%Y%m%d_%H%M%S)"
+  bag_args="${MULLET_BAG_TOPICS}"
+  if [[ "${bag_args}" == all ]]; then bag_args="-a"; fi
+  add_pane bag bag "rosbag → ${bag_dir}" "#FF5470" "$(docker_exec bash)" \
+    "mkdir -p /ws/bags && ros2 bag record -o ${bag_dir} ${bag_args}"
+fi
+
+# Type the queued commands once each container shell shows its prompt
+# (keys sent earlier are echoed twice by the terminal).
+for i in "${!pending_panes[@]}"; do
+  id="${pending_panes[$i]}"
+  for _ in {1..50}; do
+    if [[ "$(tmx capture-pane -p -t "${id}")" == *[\$#] ]]; then break; fi
+    sleep 0.2
+  done
+  if [[ "${pending_enter[$i]}" == 1 ]]; then
+    tmx send-keys -t "${id}" "${pending_keys[$i]}" Enter
+  else
+    tmx send-keys -t "${id}" "${pending_keys[$i]}"
   fi
 done
 
-# Prepare the other commands from the command list, 1 per pane.
+if [[ "${MULLET_QGC}" == 1 ]]; then
+  qgc="${QGC_PATH:-$(env_file_value QGC_PATH)}"
+  qgc="${qgc:-$(command -v QGroundControl || true)}"
+  if pgrep -f QGroundControl >/dev/null 2>&1; then
+    echo "[mullet] QGroundControl already running"
+  elif [[ -n "${qgc}" && -x "${qgc}" ]]; then
+    setsid "${qgc}" >/dev/null 2>&1 </dev/null &
+    echo "[mullet] started QGroundControl: ${qgc}"
+  else
+    echo "[mullet] warning: QGroundControl not found; set QGC_PATH in .env" >&2
+  fi
+fi
 
-# Focus the pane running build/launch.
-"${tmux_base_cmd[@]}" select-pane -t "${shell_pane_id}"
+# Session-wide info and bindings that need absolute paths.
+tmx set -g @mullet_domain "${ROS_DOMAIN_ID}"
+tmx bind r source-file "${script_dir}/${TMUX_CONF_PATH}" \; display "Config reloaded!"
+tmx bind S confirm-before -p "Stop the simulation? (y/n)" "run-shell -b '${script_dir}/stop.sh'"
+tmx bind -n MouseDown1Status if -F '#{==:#{mouse_status_range},stop}' \
+  "confirm-before -p 'Stop the simulation? (y/n)' \"run-shell -b '${script_dir}/stop.sh'\"" \
+  'switch-client -t ='
 
-"${tmux_base_cmd[@]}" select-window -t "${SESSION_NAME}:px4" || true
+echo "[mullet] tmux session ready: tmux -L ${TMUX_SOCKET} attach -t ${SESSION_NAME}"
 
-docker exec -it "${CONTAINER_NAME}" tmux attach -t "${SESSION_NAME}"
-
-docker compose down
+if ((ATTACH)); then
+  tmx select-window -t "${SESSION_NAME}:=px4" 2>/dev/null || true
+  env -u TMUX tmux -L "${TMUX_SOCKET}" attach -t "${SESSION_NAME}" || true
+  if ((KEEP)); then
+    echo "[mullet] still running. Re-attach: tmux -L ${TMUX_SOCKET} attach -t ${SESSION_NAME} | stop: ./stop.sh"
+  else
+    ./stop.sh
+  fi
+fi

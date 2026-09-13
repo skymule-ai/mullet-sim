@@ -1,0 +1,6 @@
+[submodule "ws/src/mullet-core"]
+	path = ws/src/mullet-core
+	url = git@github.com:skymule-ai/mullet-core.git
+[submodule "ws/src/mullet-interfaces"]
+	path = ws/src/mullet-interfaces
+	url = git@github.com:skymule-ai/mullet-interfaces.git

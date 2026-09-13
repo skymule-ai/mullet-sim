@@ -1,0 +1,39 @@
+# Example session: 2x X500 under /uav_1 and /uav_2 on ROS_DOMAIN_ID 42.
+# Without the TUI: ./run.sh --config config/sessions/example_uav.yaml
+# Same parser rules as drones.yaml: no anchors, no multi-line values, no '#' inside values.
+# core + build need the private mullet-core submodule; without org access use
+# build: false and windows: [px4, xrce, code].
+simulation:
+  world: default
+  headless: false
+  ros_domain_id: 42
+  namespace_prefix: uav
+  speed_factor: 1.0
+  xrce_agent:
+    transport: udp4
+    port: 8888
+
+session:
+  image: ghcr.io/skymule-ai/px4-sitl:v1.16.1
+  gpu: auto
+  build: true
+  rviz: false
+  qgc: false
+  foxglove: false
+  bag: false
+  bag_topics: all
+  windows: [px4, xrce, core, code]
+
+commands:
+  - run: ros2 topic list | grep {ns_prefix}
+    autorun: false
+
+fleet:
+  - id: uav_1
+    instance: 1
+    model: gz_x500
+    pose: [0.0, 0.0, 0.2, 0.0, 0.0, 0.0]
+  - id: uav_2
+    instance: 2
+    model: gz_x500
+    pose: [3.0, 0.0, 0.2, 0.0, 0.0, 0.0]

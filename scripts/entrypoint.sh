@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
+# Container entrypoint: optional airframe patch / PX4 rebuild, ROS env, then
+# spawn_fleet.py (ENTRYPOINT_MODE=sitl) or an idle loop (no_sitl).
 set -euo pipefail
-
-# Patch lawnmower airframe in PX4 tree before spawning the fleet.
 
 cd "${WORKSPACE_DIR:-/ws}"
 
@@ -18,24 +18,26 @@ AIRFRAME_BUILD_DST="/opt/PX4-Autopilot/build/px4_sitl_default/etc/init.d-posix/a
 AIRFRAME_URL="https://raw.githubusercontent.com/PX4/PX4-Autopilot/main/ROMFS/px4fmu_common/init.d-posix/airframes/4011_gz_lawnmower"
 MULLET_PX4_REBUILD="${MULLET_PX4_REBUILD:-0}"
 
+# Best-effort: offline or unprivileged starts keep the airframe shipped in the image.
 patch_airframe_file() {
   local dst="$1"
+  local as=()
 
-  if [[ "$(id -u)" -eq 0 ]]; then
-    curl -fL --retry 3 --connect-timeout 10 -o "${dst}" "${AIRFRAME_URL}"
-    return
+  if [[ "$(id -u)" -ne 0 ]]; then
+    if ! command -v sudo >/dev/null 2>&1; then
+      echo "[mullet] warning: cannot patch ${dst} (not root, no sudo); keeping the image's airframe" >&2
+      return 0
+    fi
+    as=(sudo -n)
   fi
 
-  if command -v sudo >/dev/null 2>&1; then
-    sudo -n curl -fL --retry 3 --connect-timeout 10 -o "${dst}" "${AIRFRAME_URL}" || {
-      echo "Unable to patch ${dst}: sudo privileges are required." >&2
-      exit 1
-    }
-    return
+  # Download to a temp file so a failed transfer never leaves a truncated airframe.
+  if "${as[@]}" curl -fsSL --retry 3 --connect-timeout 10 -o "${dst}.tmp" "${AIRFRAME_URL}" &&
+    "${as[@]}" mv "${dst}.tmp" "${dst}"; then
+    return 0
   fi
-
-  echo "Unable to patch ${dst}: run as root or provide sudo." >&2
-  exit 1
+  "${as[@]}" rm -f "${dst}.tmp" || true
+  echo "[mullet] warning: could not update ${dst} from ${AIRFRAME_URL} (offline?); keeping the image's airframe" >&2
 }
 
 patch_airframe_file "${AIRFRAME_DST}"
