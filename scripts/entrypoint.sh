@@ -68,7 +68,6 @@ source /scripts/sourcefile.sh
 set -u
 
 VENV_DIR="${VENV_DIR:-/ws/venv}"
-export PYTHONPATH="${VENV_DIR}/lib/python3.10/site-packages:${PYTHONPATH:-}"
 
 if [[ -d "${VENV_DIR}" ]]; then
   if ! touch "${VENV_DIR}/COLCON_IGNORE" 2>/dev/null; then

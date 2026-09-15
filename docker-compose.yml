@@ -2,7 +2,7 @@
 # docker-compose.override.yml (your local extra mounts, gitignored).
 services:
   px4_sitl:
-    image: ${PX4_SITL_IMAGE:-ghcr.io/skymule-ai/px4-sitl:v1.16.1}
+    image: ${PX4_SITL_IMAGE:-ghcr.io/skymule-ai/px4-sitl:v1.17.0}
     container_name: mullet_px4_sitl
     privileged: true
     shm_size: "2g"
@@ -24,8 +24,9 @@ services:
       - MULLET_RESET_PARAMS=${MULLET_RESET_PARAMS:-0}
       - MULLET_PX4_REBUILD=${MULLET_PX4_REBUILD:-0}
       - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
-      - PYTHONPATH=/ws/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages
+      - MULLET_DOMAIN_OVERRIDE=${MULLET_DOMAIN_OVERRIDE:-}
       - ENTRYPOINT_MODE=sitl
+      - MULLET_HEADLESS=${MULLET_HEADLESS:-0}
       - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-ogre2}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -51,7 +52,7 @@ services:
     network_mode: host
 
   px4_no_sitl:
-    image: ${PX4_SITL_IMAGE:-ghcr.io/skymule-ai/px4-sitl:v1.16.1}
+    image: ${PX4_SITL_IMAGE:-ghcr.io/skymule-ai/px4-sitl:v1.17.0}
     container_name: mullet_px4_no_sitl
     privileged: true
     shm_size: "2g"
@@ -72,7 +73,7 @@ services:
       - MULLET_RESET_PARAMS=${MULLET_RESET_PARAMS:-0}
       - MULLET_PX4_REBUILD=${MULLET_PX4_REBUILD:-0}
       - XRCE_DOMAIN_ID_OVERRIDE=${ROS_DOMAIN_ID:-0}
-      - PYTHONPATH=/ws/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages
+      - MULLET_DOMAIN_OVERRIDE=${MULLET_DOMAIN_OVERRIDE:-}
       - ENTRYPOINT_MODE=no_sitl
       - PX4_GZ_SIM_RENDER_ENGINE=${PX4_GZ_SIM_RENDER_ENGINE:-ogre2}
     volumes:

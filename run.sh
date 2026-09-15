@@ -2,7 +2,9 @@
 # Launch the SITL fleet described by a fleet/session YAML and open the tmux view.
 # Validates the config, pulls up mullet_px4_sitl, waits for /tmp/runtime/ready,
 # optionally runs colcon, then tags host tmux panes. Detaching runs ./stop.sh
-# unless --keep. The TUI (./mullet) calls this with --no-attach.
+# unless --keep. The TUI (./mullet) calls this with --no-attach. --headless skips
+# tmux and the GUI: it starts the cores in the background, waits for their
+# heartbeats and returns, for the paddock and test harnesses.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,11 +12,14 @@ cd "${script_dir}"
 
 usage() {
   cat <<'EOF'
-Usage: ./run.sh [--config PATH] [--no-attach] [--keep]
+Usage: ./run.sh [--config PATH] [--no-attach] [--keep] [--headless] [--domain N]
 
   --config PATH  fleet/session YAML under config/ (default: $CONFIG_PATH or config/drones.yaml)
   --no-attach    set everything up without attaching to tmux (used by the TUI)
   --keep         keep the simulation running after you detach from tmux
+  --headless     no Gazebo GUI, no tmux: start the cores, wait for every heartbeat, return
+                 with the simulation running (./stop.sh stops it)
+  --domain N     ROS_DOMAIN_ID for this run, over simulation.ros_domain_id and the env
 EOF
 }
 
@@ -22,15 +27,23 @@ CONFIG_PATH="${CONFIG_PATH:-config/drones.yaml}"
 TMUX_CONF_PATH="${TMUX_CONF_PATH:-config/tmux.conf}"
 ATTACH=1
 KEEP=0
+HEADLESS=0
+DOMAIN_OVERRIDE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --config) CONFIG_PATH="${2:?--config needs a path}"; shift 2 ;;
     --no-attach) ATTACH=0; shift ;;
     --keep) KEEP=1; shift ;;
+    --headless) HEADLESS=1; shift ;;
+    --domain) DOMAIN_OVERRIDE="${2:?--domain needs a ROS domain id}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
 done
+if [[ -n "${DOMAIN_OVERRIDE}" ]] && ! [[ "${DOMAIN_OVERRIDE}" =~ ^[0-9]+$ && "${DOMAIN_OVERRIDE}" -le 232 ]]; then
+  echo "--domain must be a ROS domain id in [0, 232], got '${DOMAIN_OVERRIDE}'" >&2
+  exit 2
+fi
 
 CONFIG_DIR="${script_dir}/config"
 CONTAINER_NAME="mullet_px4_sitl"
@@ -67,9 +80,13 @@ fi
 env_file_value() { sed -n "s/^$1=//p" .env | tail -n 1; }
 
 # One ROS_DOMAIN_ID for everything (container, agent, PX4, every pane):
-# config > shell env > .env > 0. The shell env also wins over .env inside compose.
-export ROS_DOMAIN_ID="${MULLET_ROS_DOMAIN_ID:-${ROS_DOMAIN_ID:-$(env_file_value ROS_DOMAIN_ID)}}"
+# --domain > config > shell env > .env > 0. The shell env also wins over .env inside compose.
+# --domain reaches the container as MULLET_DOMAIN_OVERRIDE, which spawn_fleet.py and
+# sourcefile.sh also put first, so the container never falls back to the config's domain.
+export MULLET_DOMAIN_OVERRIDE="${DOMAIN_OVERRIDE}"
+export ROS_DOMAIN_ID="${DOMAIN_OVERRIDE:-${MULLET_ROS_DOMAIN_ID:-${ROS_DOMAIN_ID:-$(env_file_value ROS_DOMAIN_ID)}}}"
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+export MULLET_HEADLESS="${HEADLESS}"
 if [[ -n "${MULLET_IMAGE}" ]]; then export PX4_SITL_IMAGE="${MULLET_IMAGE}"; fi
 if [[ -n "${MULLET_RMW}" ]]; then export RMW_IMPLEMENTATION="${MULLET_RMW}"; fi
 if [[ -n "${MULLET_RESET_PARAMS:-}" ]]; then export MULLET_RESET_PARAMS; fi
@@ -129,6 +146,52 @@ if [[ "${MULLET_BUILD}" == 1 ]]; then
   fi
 fi
 
+# core_cmd INSTANCE: the mullet_core command for one simulated drone (tmux pane or headless).
+# Its launch file takes no arguments (one YAML per drone), so each instance runs the node on the
+# packaged YAML with its instance and namespace overridden. The node's drone_id is uav_<N>.
+core_params='$(ros2 pkg prefix mullet_core)/share/mullet_core/config/mullet_core_params.yaml'
+core_cmd() {
+  local ns_arg=""
+  if [[ "$1" != 0 ]]; then ns_arg="-r __ns:=/${MULLET_NS_PREFIX}_$1 "; fi
+  printf '%s' "ros2 run mullet_core mullet_core_node --ros-args ${ns_arg}-r __node:=mullet_core_$1 --params-file ${core_params} -p vehicle_instance:=$1 -p px4_namespace_prefix:=${MULLET_NS_PREFIX}"
+}
+
+if ((HEADLESS)); then
+  drones=()
+  if [[ " ${MULLET_WINDOWS} " == *" core "* ]]; then
+    for inst in "${INSTANCES[@]}"; do
+      docker exec -d -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" "${CONTAINER_NAME}" bash -c \
+        "source /scripts/sourcefile.sh && exec $(core_cmd "${inst}") > ${RUNTIME_DIR_IN_CONTAINER}/core_${inst}.log 2>&1"
+      drones+=("uav_${inst}")
+    done
+    echo "[mullet] waiting for heartbeats from ${drones[*]}..."
+    # Reads the heartbeat stream until every drone has spoken (heartbeat_json.py stops on the
+    # closed pipe), so the status that matters is the reader's, not the stream's.
+    wait_py='import json, sys
+want = set(sys.argv[1:])
+for line in sys.stdin:
+    try:
+        want.discard(json.loads(line).get("drone_id"))
+    except ValueError:
+        continue
+    if not want:
+        sys.exit(0)
+sys.exit(1)'
+    set +o pipefail
+    docker exec -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" "${CONTAINER_NAME}" bash -c \
+      "source /scripts/sourcefile.sh && timeout 90 python3 -u /scripts/heartbeat_json.py" 2>/dev/null |
+      python3 -c "${wait_py}" "${drones[@]}"
+    heard_all="${PIPESTATUS[1]}"
+    set -o pipefail
+    if [[ "${heard_all}" != 0 ]]; then
+      echo "[mullet] not every drone published a heartbeat within 90 s; see ${RUNTIME_DIR_IN_CONTAINER}/core_<N>.log in ${CONTAINER_NAME}" >&2
+      exit 1
+    fi
+  fi
+  echo "[mullet] live on ROS_DOMAIN_ID=${ROS_DOMAIN_ID}: ${drones[*]:-PX4 only (no core window)}. Stop with ./stop.sh"
+  exit 0
+fi
+
 # ---- tmux (host, dedicated socket so your own tmux is untouched) ----
 tmx() { tmux -L "${TMUX_SOCKET}" "$@"; }
 
@@ -184,14 +247,9 @@ if has_window xrce; then
 fi
 
 if has_window core; then
-  # mullet_core's launch file takes no arguments (one YAML per drone), so each simulated
-  # instance runs the node on the packaged YAML with its instance and namespace overridden.
-  core_params='$(ros2 pkg prefix mullet_core)/share/mullet_core/config/mullet_core_params.yaml'
   for inst in "${INSTANCES[@]}"; do
-    ns_arg=""
-    if [[ "${inst}" != 0 ]]; then ns_arg="-r __ns:=/${MULLET_NS_PREFIX}_${inst} "; fi
     add_pane core "core:${inst}" "CORE · $(ns_label "${inst}")" "$(robot_color "${inst}")" "$(docker_exec bash)" \
-      "ros2 run mullet_core mullet_core_node --ros-args ${ns_arg}-r __node:=mullet_core_${inst} --params-file ${core_params} -p vehicle_instance:=${inst} -p px4_namespace_prefix:=${MULLET_NS_PREFIX}"
+      "$(core_cmd "${inst}")"
   done
 fi
 

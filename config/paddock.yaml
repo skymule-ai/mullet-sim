@@ -1,0 +1,26 @@
+# Headless live mock for mullet-paddock: 2x X500 with mullet_core, no GUI, no tmux.
+#   ./run.sh --headless --config config/paddock.yaml [--domain N]
+# Same parser rules as drones.yaml: no anchors, no multi-line values, no '#' inside values.
+simulation:
+  world: default
+  headless: true
+  ros_domain_id: 42
+  namespace_prefix: uav
+  xrce_agent:
+    transport: udp4
+    port: 8888
+
+session:
+  gpu: auto
+  build: true
+  windows: [core]
+
+fleet:
+  - id: uav_1
+    instance: 1
+    model: gz_x500
+    pose: [0.0, 0.0, 0.2, 0.0, 0.0, 0.0]
+  - id: uav_2
+    instance: 2
+    model: gz_x500
+    pose: [3.0, 0.0, 0.2, 0.0, 0.0, 0.0]
