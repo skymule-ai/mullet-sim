@@ -25,8 +25,13 @@ Inside the container:
 
 ```sh
 cd /ws && colcon build
-ros2 launch mullet_core mullet_core.launch.py px4_instances:=1 px4_namespace_prefix:=uav
+ros2 run mullet_core mullet_core_node --ros-args -r __ns:=/px4_1 \
+  --params-file "$(ros2 pkg prefix mullet_core)/share/mullet_core/config/mullet_core_params.yaml" \
+  -p vehicle_instance:=1 -p px4_namespace_prefix:=px4
 ```
+
+`mullet_core.launch.py` takes no arguments (one YAML per drone), so `run.sh` starts
+each simulated instance this way.
 
 One-time without `setup.sh`: `cp .env.example .env` and (org SSH)
 `git submodule update --init`.
@@ -42,7 +47,7 @@ unless `--keep`.
 - `tui/`: Go TUI. Binary `./mullet` at the repo root (`tui/build.sh`).
 - `ws/`: ROS 2 workspace mounted at `/ws`.
   - `ws/src/mullet-core`, `ws/src/mullet-interfaces`: private submodules
-  - `ws/src/px4_state_machine`, `ws/src/ergodic_mppi_ros2`: in-tree packages
+  - `ws/src/px4_state_machine`: in-tree package
   - `ws/build/`, `ws/install/`, `ws/log/`: colcon output (do not commit)
 
 ## Architecture
@@ -109,8 +114,10 @@ commands. `scripts/heartbeat_json.py` streams `/mullet/heartbeat` as JSON (needs
 ### ROS 2 workspace
 
 - `mullet_core`: per-robot offboard supervisor; namespace `/<prefix>_<instance>`.
-- `mullet_interfaces`: actions and `DroneHeartbeat`.
-- `px4_state_machine`, `ergodic_mppi_ros2`: other controllers.
+- `mullet_interfaces`: actions, `DroneHeartbeat` and the mission API
+  (`MissionCommand`, `MissionStatus`, `LoadMission`).
+- `px4_state_machine`: older standalone controllers. Mission frameworks (e.g. the
+  ergodic MPPI) live in their own repos and talk to `mullet_core` over the mission API.
 
 ### `scripts/sourcefile.sh`
 

@@ -343,12 +343,6 @@
             <td>X500 node warms up setpoints, requests ARM/OFFBOARD, then takes off and hovers.</td>
             <td><code>ws/src/px4_state_machine/scripts/x500_offboard.py</code></td>
           </tr>
-          <tr>
-            <td>5</td>
-            <td>Command loop</td>
-            <td>Coordinator publishes <code>[vx, vy, 1]</code> direction commands to each <code>/px4_N/command</code>.</td>
-            <td><code>ws/src/ergodic_mppi_ros2/ergodic_mppi_ros2/coordinator_node.py</code></td>
-          </tr>
         </tbody>
       </table>
     </section>
@@ -426,19 +420,6 @@
         ]
       },
       {
-        id: "mppi_pkg",
-        label: "ergodic_mppi_ros2",
-        layer: "ros",
-        views: ["topology", "x500"],
-        box: [90, 250, 250, 85],
-        text: "Bootstrap ROS 2 package for multi-robot MPPI command generation.",
-        refs: [
-          "ws/src/ergodic_mppi_ros2/README.md",
-          "ws/src/ergodic_mppi_ros2/ergodic_mppi_ros2/coordinator_node.py",
-          "ws/src/ergodic_mppi_ros2/launch/ergodic_mppi_px4.launch.py"
-        ]
-      },
-      {
         id: "topics",
         label: "/px4_N/command",
         layer: "ros",
@@ -464,7 +445,6 @@
       { from: "entrypoint", to: "spawner", label: "spawn fleet", views: ["topology", "startup"] },
       { from: "spawner", to: "px4_1", label: "PX4 + XRCE", views: ["topology", "x500"], instances: ["1"] },
       { from: "spawner", to: "px4_2", label: "PX4 + XRCE", views: ["topology", "x500"], instances: ["2"] },
-      { from: "mppi_pkg", to: "topics", label: "publish [vx,vy,1]", views: ["topology", "x500"] },
       { from: "topics", to: "x500_node", label: "consume", views: ["topology", "x500"] },
       { from: "x500_node", to: "px4_1", label: "/px4_1/fmu/in/*", views: ["topology", "x500"], instances: ["1"] },
       { from: "x500_node", to: "px4_2", label: "/px4_2/fmu/in/*", views: ["topology", "x500"], instances: ["2"] },

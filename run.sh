@@ -184,9 +184,14 @@ if has_window xrce; then
 fi
 
 if has_window core; then
+  # mullet_core's launch file takes no arguments (one YAML per drone), so each simulated
+  # instance runs the node on the packaged YAML with its instance and namespace overridden.
+  core_params='$(ros2 pkg prefix mullet_core)/share/mullet_core/config/mullet_core_params.yaml'
   for inst in "${INSTANCES[@]}"; do
+    ns_arg=""
+    if [[ "${inst}" != 0 ]]; then ns_arg="-r __ns:=/${MULLET_NS_PREFIX}_${inst} "; fi
     add_pane core "core:${inst}" "CORE · $(ns_label "${inst}")" "$(robot_color "${inst}")" "$(docker_exec bash)" \
-      "ros2 launch mullet_core mullet_core.launch.py px4_instances:=${inst} px4_namespace_prefix:=${MULLET_NS_PREFIX}"
+      "ros2 run mullet_core mullet_core_node --ros-args ${ns_arg}-r __node:=mullet_core_${inst} --params-file ${core_params} -p vehicle_instance:=${inst} -p px4_namespace_prefix:=${MULLET_NS_PREFIX}"
   done
 fi
 
