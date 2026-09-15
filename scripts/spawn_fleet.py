@@ -48,6 +48,17 @@ DEFAULT_PX4_PARAMS = {
     "COM_DL_LOSS_T": "300",
     "COM_RC_LOSS_T": "300",
 }
+# PX4's rcS applies PX4_PARAM_* before the airframe script, and the airframe's `param
+# set-default` then replaces any value equal to PX4's compiled default (gz_x500 sets NAV_DLL_ACT 2
+# over our 0, so arming wants a GCS). rcS sources `<airframe>.post` last: re-apply them there.
+PARAM_POST_HOOK = """# mullet_sitl_sim: re-apply PX4_PARAM_* after the airframe's set-defaults.
+env | while IFS='=' read -r line; do
+  name=${line%%=*}
+  case $name in
+    "PX4_PARAM_"*) param set "${name#PX4_PARAM_}" "${line#*=}" ;;
+  esac
+done
+"""
 # Derived from the instance / ROS_DOMAIN_ID by PX4's rcS. Overriding them makes robots collide.
 RESERVED_PX4_PARAMS = ("MAV_SYS_ID", "UXRCE_DDS_KEY", "UXRCE_DDS_DOM_ID")
 PARAM_RE = re.compile(r"([A-Z][A-Z0-9_]*)=(\S+)")
@@ -197,6 +208,32 @@ def _reset_instance_params(rootfs_base: str, instance: int) -> None:
             f"[mullet] instance {instance}: reset persisted params ({', '.join(removed)})",
             flush=True,
         )
+
+
+def _install_param_hook(rootfs_base: str, autostart, sim_model: str) -> None:
+    """Make PX4 re-apply this launcher's ``PX4_PARAM_*`` after the airframe's defaults.
+
+    Appends ``PARAM_POST_HOOK`` to ``<autostart>_<model>.post`` next to the airframe, which
+    rcS sources last; an existing ``.post`` keeps its content.
+
+    Args:
+        rootfs_base: PX4's ``rootfs`` directory; the airframes live in its sibling ``etc``.
+        autostart: Airframe autostart id (``PX4_SYS_AUTOSTART``).
+        sim_model: Gazebo model of the airframe (``gz_x500``).
+    """
+    path = os.path.join(
+        os.path.dirname(rootfs_base), "etc", "init.d-posix", "airframes", f"{autostart}_{sim_model}.post"
+    )
+    try:
+        existing = ""
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as handle:
+                existing = handle.read()
+        if PARAM_POST_HOOK not in existing:
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(("\n" if existing and not existing.endswith("\n") else "") + PARAM_POST_HOOK)
+    except OSError as exc:
+        _err(f"[mullet] warning: cannot write {path} ({exc}); airframe defaults may override PX4 params")
 
 
 def _discover_airframes(px4_root: str) -> dict:
@@ -617,11 +654,17 @@ def _launch(cfg) -> int:
     fleet = cfg["fleet"]
 
     world = sim.get("world", "default")
-    headless = bool(sim.get("headless", False))
+    headless = bool(sim.get("headless", False)) or _env_bool("MULLET_HEADLESS", default=False)
     config_gz_ip = str(sim.get("gz_ip", "127.0.0.1")).strip()
-    ros_domain_id = int(
-        sim.get("ros_domain_id", int(os.environ.get("ROS_DOMAIN_ID", "0")))
-    )
+    # Same precedence as run.sh and sourcefile.sh: --domain > config > env > 0.
+    override = os.environ.get("MULLET_DOMAIN_OVERRIDE", "").strip()
+    if override:
+        ros_domain_id, domain_source = int(override), "run.sh --domain"
+    elif "ros_domain_id" in sim:
+        ros_domain_id, domain_source = int(sim["ros_domain_id"]), "simulation.ros_domain_id"
+    else:
+        ros_domain_id = int(os.environ.get("ROS_DOMAIN_ID", "0"))
+        domain_source = "ROS_DOMAIN_ID"
     ns_prefix = sim.get("namespace_prefix")
     speed_factor = sim.get("speed_factor")
     session_params = _parse_params(sim.get("px4_params"), "simulation.px4_params", [])
@@ -649,7 +692,7 @@ def _launch(cfg) -> int:
     os.makedirs(runtime_dir, exist_ok=True)
     print(f"[mullet] runtime dir: {runtime_dir}", flush=True)
     print(f"[mullet] GZ_IP={env_base['GZ_IP']}", flush=True)
-    print(f"[mullet] ROS_DOMAIN_ID={ros_domain_id}", flush=True)
+    print(f"[mullet] ROS_DOMAIN_ID={ros_domain_id} (from {domain_source})", flush=True)
     print(f"[mullet] PX4_BIN={px4_bin}", flush=True)
     if px4_resolved:
         print(f"[mullet] PX4_BIN_RESOLVED={px4_resolved}", flush=True)
@@ -746,6 +789,7 @@ def _launch(cfg) -> int:
         if reset_params:
             _reset_instance_params(rootfs_base, inst)
             env["PX4_PARAM_SYS_AUTOCONFIG"] = "1"
+        _install_param_hook(rootfs_base, sys_autostart, sim_model)
 
         cmd = [px4_bin, "-i", str(inst)]
         print(

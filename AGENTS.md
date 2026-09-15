@@ -7,7 +7,8 @@ One container runs Gazebo + N PX4 instances + a single `MicroXRCEAgent`. The TUI
 (`./mullet`) builds sessions and arranges tmux panes; everything also works with
 `run.sh` alone.
 
-The PX4 image `ghcr.io/skymule-ai/px4-sitl:v1.16.1` is public. Submodules
+The PX4 image `ghcr.io/skymule-ai/px4-sitl:v1.17.0` (ROS 2 Jazzy, PX4 1.17 like the
+drones' Pixhawks) is public. Submodules
 `ws/src/mullet-core` and `ws/src/mullet-interfaces` are private (SSH). Without
 org access, run with `session.build: false` and `windows: [px4, xrce, code]`.
 
@@ -15,7 +16,8 @@ org access, run with `session.build: false` and `windows: [px4, xrce, code]`.
 
 ```sh
 ./setup.sh                                          # tools check, docker pull, .env, submodules, TUI
-./run.sh --config config/sessions/example_uav.yaml  # [--no-attach] [--keep]
+./run.sh --config config/sessions/example_uav.yaml  # [--no-attach] [--keep] [--domain N]
+./run.sh --headless --config config/paddock.yaml    # no GUI/tmux: cores up, returns on heartbeats
 ./stop.sh
 python3 scripts/spawn_fleet.py --config config/sessions/example_uav.yaml --print-env
 tui/build.sh && tui/build.sh test ./... && ./mullet

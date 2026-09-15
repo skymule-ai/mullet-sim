@@ -1,6 +1,6 @@
 # Vehicles and worlds
 
-Models and autostart IDs below match `ghcr.io/skymule-ai/px4-sitl:v1.16.1`. The
+Models and autostart IDs below match `ghcr.io/skymule-ai/px4-sitl:v1.17.0`. The
 launcher and the TUI read valid models from the airframes of the image you run,
 so other PX4 versions may add or rename vehicles. Full PX4 list:
 [Gazebo simulation](https://docs.px4.io/main/en/sim_gazebo_gz/).

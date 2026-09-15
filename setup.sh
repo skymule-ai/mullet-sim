@@ -5,7 +5,9 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${script_dir}"
 
-DEFAULT_IMAGE="${PX4_SITL_IMAGE:-ghcr.io/skymule-ai/px4-sitl:v1.16.1}"
+DEFAULT_IMAGE="${PX4_SITL_IMAGE:-ghcr.io/skymule-ai/px4-sitl:v1.17.0}"
+# The image's PX4 line (1.17.x, as on the drones' Pixhawks); mullet_core builds against it.
+PX4_MSGS_BRANCH="release/1.17"
 need=()
 
 need_cmd() {
@@ -58,6 +60,12 @@ session:
 
 CORE panes and the heartbeat dashboard need the submodules and colcon build.
 EOF
+fi
+
+if [[ ! -f ws/src/px4_msgs/package.xml ]]; then
+  echo "[mullet] cloning px4_msgs ${PX4_MSGS_BRANCH} into ws/src/px4_msgs"
+  rmdir ws/src/px4_msgs 2>/dev/null || true
+  git clone --depth 1 --branch "${PX4_MSGS_BRANCH}" https://github.com/PX4/px4_msgs.git ws/src/px4_msgs
 fi
 
 echo "[mullet] building TUI → ./mullet (optional)"

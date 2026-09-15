@@ -15,7 +15,7 @@ func TestSessionRoundTripThroughPythonParser(t *testing.T) {
 		t.Skip("python3 not available")
 	}
 	repo, _ := filepath.Abs("../../..")
-	s := New("ghcr.io/skymule-ai/px4-sitl:v1.16.1")
+	s := New("ghcr.io/skymule-ai/px4-sitl:v1.17.0")
 	s.Name, s.DomainID, s.SpeedFactor = "roundtrip", 42, 2.5
 	s.PX4Params = []string{"COM_ARM_WO_GPS=1"}
 	s.RViz, s.RVizConfig, s.Bag, s.BagTopics = true, "/ws/x.rviz", true, []string{"/uav_1/fmu/out/vehicle_odometry", "/tf"}

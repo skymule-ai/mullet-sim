@@ -9,8 +9,8 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-4CC2FF?style=flat-square" alt="MIT"></a>
-  <img src="https://img.shields.io/badge/PX4-v1.16.1-FFB547?style=flat-square" alt="PX4">
-  <img src="https://img.shields.io/badge/ROS%202-Humble-3DDC97?style=flat-square" alt="ROS 2">
+  <img src="https://img.shields.io/badge/PX4-v1.17.0-FFB547?style=flat-square" alt="PX4">
+  <img src="https://img.shields.io/badge/ROS%202-Jazzy-3DDC97?style=flat-square" alt="ROS 2">
   <img src="https://img.shields.io/badge/tmux-3.4+-8B93A7?style=flat-square" alt="tmux">
 </p>
 
@@ -26,8 +26,9 @@ MULLET launches a multi-vehicle [PX4](https://px4.io/) SITL + Gazebo (GZ) fleet 
 - The host runs tmux on socket `mullet` (`tmux -L mullet`). Detaching stops the sim unless you pass `--keep`.
 - An optional Go TUI (`./mullet`) builds the fleet, themes tmux, and lays out a live dashboard.
 - Networking is `network_mode: host` (Linux). QGroundControl auto-connects on localhost — nothing is published as forwarded UDP ports.
+- `./run.sh --headless` runs the same fleet with no GUI and no tmux, starts `mullet_core` for every drone and returns once they all publish heartbeats: the live backend for [mullet-paddock](#headless--live-mock) and for scripted end-to-end tests.
 
-PX4 image (public): `ghcr.io/skymule-ai/px4-sitl:v1.16.1`.
+PX4 image (public): `ghcr.io/skymule-ai/px4-sitl:v1.17.0` — ROS 2 Jazzy, PX4 1.17 (the drones' Pixhawks run 1.17.x; `px4_msgs` follows `release/1.17`).
 
 ROS packages `mullet-core` and `mullet-interfaces` are **private SkyMule submodules**. You can still run PX4 + Gazebo + XRCE without them.
 
@@ -81,9 +82,10 @@ session:
 ### Manual steps (same as setup.sh)
 
 ```sh
-docker pull ghcr.io/skymule-ai/px4-sitl:v1.16.1
+docker pull ghcr.io/skymule-ai/px4-sitl:v1.17.0
 cp .env.example .env
 git submodule update --init          # SkyMule SSH
+git clone --depth 1 -b release/1.17 https://github.com/PX4/px4_msgs.git ws/src/px4_msgs
 tui/build.sh                         # optional → ./mullet
 ```
 
@@ -106,6 +108,21 @@ Build the fleet (models and worlds are discovered from local PX4 images), press 
 ```
 
 `run.sh --keep` leaves the simulation running after you detach. `prefix+S` or the `■ STOP` status button also stops it.
+
+### Headless / live mock
+
+```sh
+./run.sh --headless --config config/paddock.yaml --domain 42
+# [mullet] live on ROS_DOMAIN_ID=42: uav_1 uav_2. Stop with ./stop.sh
+./stop.sh
+```
+
+`--headless` forces `HEADLESS=1` (no Gazebo window), skips tmux, starts one `mullet_core` per drone in the background (logs in the container's `/tmp/runtime/core_<N>.log`) when `session.windows` has `core`, waits until every drone publishes `/mullet/heartbeat` (drone ids `uav_<instance>`), then returns with the simulation running. `--domain N` sets the ROS domain for the whole run, over the config. [`config/paddock.yaml`](config/paddock.yaml) is two X500s under `/uav_1` and `/uav_2`.
+
+Use it as:
+
+- **mullet-paddock's live mock**: `make sim-dev` in the paddock repo runs the line above and then the ROS 2 gateway on the same domain, so the UI flies real PX4 + `mullet_core` instead of the in-process mock.
+- **An end-to-end test backend**: any ROS 2 process on the domain sees the drones exactly as on the real stack (heartbeat, actions, `start_mission`/`hold`, `<ns>/command`). The ergodic MPPI's `tests/sitl/sitl_e2e.py` flies a full mission against it.
 
 Validate a config on the host:
 
@@ -144,7 +161,7 @@ Parsed by `scripts/spawn_fleet.py` (stdlib YAML subset: **no anchors, no multi-l
 | `simulation.world` | `PX4_GZ_WORLD` (`default`, `windy`, `baylands`, …) |
 | `simulation.gz_ip` | Gazebo transport. Use `127.0.0.1` here |
 | `simulation.headless` | `HEADLESS=1` (no Gazebo GUI) |
-| `simulation.ros_domain_id` | DDS domain everywhere (config > shell > `.env` > 0) |
+| `simulation.ros_domain_id` | DDS domain everywhere (`run.sh --domain` > config > shell > `.env` > 0) |
 | `simulation.namespace_prefix` | instance N → `/<prefix>_N` (else `/px4_N`) |
 | `simulation.speed_factor` | `PX4_SIM_SPEED_FACTOR` |
 | `simulation.px4_params` / `fleet[].params` | `NAME=VALUE` (not `MAV_SYS_ID` / DDS keys) |
@@ -177,10 +194,9 @@ Start fleets at instance `1` so no vehicle occupies the unprefixed namespace.
 
 ### Custom ROS 2 code
 
-Add packages under `ws/src/` (or an override mount). Optional PX4 ROS deps (gitignored):
+Add packages under `ws/src/` (or an override mount). `setup.sh` clones `px4_msgs` at `release/1.17` (gitignored; `mullet_core` builds against it). Keep it on the image's PX4 line. Optional:
 
 ```sh
-git clone https://github.com/PX4/px4_msgs.git ws/src/px4_msgs
 git clone https://github.com/PX4/px4_ros_com.git ws/src/px4_ros_com
 ```
 
@@ -212,7 +228,7 @@ If Gazebo is still laggy: prefer an X11 session (not Wayland), and check `docker
 
 ## ROS 2
 
-Set `ROS_DOMAIN_ID` in `.env` (overridden by `simulation.ros_domain_id`). The agent is `MicroXRCEAgent udp4 -p 8888` inside the SITL container. `XRCE_DOMAIN_ID_OVERRIDE` tracks the same domain.
+One domain for the whole run: `run.sh --domain N` > `simulation.ros_domain_id` > shell `ROS_DOMAIN_ID` > `.env` > 0. `--domain` reaches the container as `MULLET_DOMAIN_OVERRIDE`, which `spawn_fleet.py` (it logs the domain and where it came from) and `sourcefile.sh` also put first. Starting the container with plain `docker compose up` bypasses `run.sh`: then the config's domain wins over `ROS_DOMAIN_ID`, so set `MULLET_DOMAIN_OVERRIDE` instead. The agent is `MicroXRCEAgent udp4 -p 8888` inside the SITL container. `XRCE_DOMAIN_ID_OVERRIDE` tracks the same domain.
 
 Non-interactive `bash -c` in the container must `source /scripts/sourcefile.sh` — the image `.bashrc` returns early for non-interactive shells.
 

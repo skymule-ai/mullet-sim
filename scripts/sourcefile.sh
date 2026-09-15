@@ -17,7 +17,8 @@ if [[ -f "${CONFIG_FILE}" ]]; then
   )"
 fi
 
-export ROS_DOMAIN_ID="${config_ros_domain_id:-${ROS_DOMAIN_ID:-0}}"
+# Same precedence as spawn_fleet.py: run.sh --domain > simulation.ros_domain_id > env > 0.
+export ROS_DOMAIN_ID="${MULLET_DOMAIN_OVERRIDE:-${config_ros_domain_id:-${ROS_DOMAIN_ID:-0}}}"
 
 if [ -n "${ROS_DISTRO:-}" ] && [ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
 	. "/opt/ros/${ROS_DISTRO}/setup.bash"
@@ -34,8 +35,10 @@ if [ -f "/ws/install/setup.bash" ]; then
 	. "/ws/install/setup.bash"
 fi
 
-# At the end of sourcefile.sh
+# An optional venv in the workspace, whatever the image's Python version.
 VENV_DIR="${VENV_DIR:-/ws/venv}"
-if [ -d "${VENV_DIR}" ]; then
-  export PYTHONPATH="${VENV_DIR}/lib/python3.10/site-packages:${PYTHONPATH:-}"
-fi
+for venv_site in "${VENV_DIR}"/lib/python3*/site-packages; do
+  if [ -d "${venv_site}" ]; then
+    export PYTHONPATH="${venv_site}:${PYTHONPATH:-}"
+  fi
+done

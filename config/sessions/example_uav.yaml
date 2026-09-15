@@ -14,7 +14,7 @@ simulation:
     port: 8888
 
 session:
-  image: ghcr.io/skymule-ai/px4-sitl:v1.16.1
+  image: ghcr.io/skymule-ai/px4-sitl:v1.17.0
   gpu: auto
   build: true
   rviz: false

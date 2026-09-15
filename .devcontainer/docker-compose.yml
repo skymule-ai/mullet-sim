@@ -1,6 +1,6 @@
 services:
   dev:
-    image: ghcr.io/skymule-ai/px4-sitl:v1.16.1
+    image: ghcr.io/skymule-ai/px4-sitl:v1.17.0
     container_name: mullet_devcontainer
     privileged: true
     shm_size: "2g"
