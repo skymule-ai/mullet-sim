@@ -9,8 +9,8 @@ One container runs Gazebo + N PX4 instances + a single `MicroXRCEAgent`. The TUI
 
 The PX4 image `ghcr.io/skymule-ai/px4-sitl:v1.17.0` (ROS 2 Jazzy, PX4 1.17 like the
 drones' Pixhawks) is public. Submodules
-`ws/src/mullet-core` and `ws/src/mullet-interfaces` are private (SSH). Without
-org access, run with `session.build: false` and `windows: [px4, xrce, code]`.
+`ws/src/mullet-core` and `ws/src/mullet-interfaces` are public, cloned over SSH. Without
+a GitHub SSH key, run with `session.build: false` and `windows: [px4, xrce, code]`.
 
 ## Common commands
 
@@ -48,7 +48,7 @@ unless `--keep`.
 - `scripts/`: container entrypoint + `spawn_fleet.py` (stdlib-only) + heartbeat helper.
 - `tui/`: Go TUI. Binary `./mullet` at the repo root (`tui/build.sh`).
 - `ws/`: ROS 2 workspace mounted at `/ws`.
-  - `ws/src/mullet-core`, `ws/src/mullet-interfaces`: private submodules
+  - `ws/src/mullet-core`, `ws/src/mullet-interfaces`: submodules (SSH URLs)
   - `ws/src/px4_state_machine`: in-tree package
   - `ws/build/`, `ws/install/`, `ws/log/`: colcon output (do not commit)
 
@@ -165,7 +165,7 @@ cd ws && colcon test && colcon test-result --verbose
 ```
 
 CI (`.github/workflows/ci.yml`) runs the TUI tests and the spawn_fleet parse.
-It does not pull the PX4 image or check out private submodules.
+It does not pull the PX4 image or check out the submodules.
 
 ## Pointers
 

@@ -15,11 +15,11 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/host"
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/layout"
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/session"
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/theme"
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/tmux"
+	"github.com/skymule-ai/mullet-sim/tui/internal/host"
+	"github.com/skymule-ai/mullet-sim/tui/internal/layout"
+	"github.com/skymule-ai/mullet-sim/tui/internal/session"
+	"github.com/skymule-ai/mullet-sim/tui/internal/theme"
+	"github.com/skymule-ai/mullet-sim/tui/internal/tmux"
 )
 
 type (

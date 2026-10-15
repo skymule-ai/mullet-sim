@@ -1,4 +1,4 @@
-module github.com/skymule-ai/mullet_sitl_sim/tui
+module github.com/skymule-ai/mullet-sim/tui
 
 go 1.25.14
 

@@ -10,8 +10,8 @@ import (
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/session"
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/theme"
+	"github.com/skymule-ai/mullet-sim/tui/internal/session"
+	"github.com/skymule-ai/mullet-sim/tui/internal/theme"
 )
 
 var wordmark = []string{

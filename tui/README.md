@@ -1,6 +1,6 @@
 # mullet TUI
 
-Go TUI for mullet_sitl_sim. Module: `github.com/skymule-ai/mullet_sitl_sim/tui`.
+Go TUI for mullet-sim. Module: `github.com/skymule-ai/mullet-sim/tui`.
 
 ```
 cmd/mullet          CLI (tui / ctl / mirror)

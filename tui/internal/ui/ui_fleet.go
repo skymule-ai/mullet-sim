@@ -12,9 +12,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/host"
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/session"
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/theme"
+	"github.com/skymule-ai/mullet-sim/tui/internal/host"
+	"github.com/skymule-ai/mullet-sim/tui/internal/session"
+	"github.com/skymule-ai/mullet-sim/tui/internal/theme"
 )
 
 func splitList(s string) []string {

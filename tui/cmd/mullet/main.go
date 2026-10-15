@@ -1,4 +1,4 @@
-// mullet is an optional TUI for mullet_sitl_sim: build a fleet session, launch it through
+// mullet is an optional TUI for mullet-sim: build a fleet session, launch it through
 // ./run.sh and arrange the simulation panes in a tmux dashboard.
 package main
 
@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/host"
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/tmux"
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/ui"
+	"github.com/skymule-ai/mullet-sim/tui/internal/host"
+	"github.com/skymule-ai/mullet-sim/tui/internal/tmux"
+	"github.com/skymule-ai/mullet-sim/tui/internal/ui"
 )
 
 const usage = `Usage:

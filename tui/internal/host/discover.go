@@ -67,7 +67,7 @@ func isRepo(dir string) bool {
 	return true
 }
 
-// FindRepo locates the mullet_sitl_sim repo: $MULLET_REPO, the binary's directory
+// FindRepo locates the mullet-sim repo: $MULLET_REPO, the binary's directory
 // (build.sh puts ./mullet at the repo root), then the current directory and its parents.
 func FindRepo() (string, error) {
 	if d := os.Getenv("MULLET_REPO"); d != "" && isRepo(d) {
@@ -85,7 +85,7 @@ func FindRepo() (string, error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", errors.New("mullet_sitl_sim repo not found: run from inside it or set MULLET_REPO")
+			return "", errors.New("mullet-sim repo not found: run from inside it or set MULLET_REPO")
 		}
 		dir = parent
 	}

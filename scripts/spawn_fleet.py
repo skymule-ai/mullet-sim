@@ -51,7 +51,7 @@ DEFAULT_PX4_PARAMS = {
 # PX4's rcS applies PX4_PARAM_* before the airframe script, and the airframe's `param
 # set-default` then replaces any value equal to PX4's compiled default (gz_x500 sets NAV_DLL_ACT 2
 # over our 0, so arming wants a GCS). rcS sources `<airframe>.post` last: re-apply them there.
-PARAM_POST_HOOK = """# mullet_sitl_sim: re-apply PX4_PARAM_* after the airframe's set-defaults.
+PARAM_POST_HOOK = """# mullet-sim: re-apply PX4_PARAM_* after the airframe's set-defaults.
 env | while IFS='=' read -r line; do
   name=${line%%=*}
   case $name in

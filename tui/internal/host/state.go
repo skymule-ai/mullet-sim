@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/layout"
+	"github.com/skymule-ai/mullet-sim/tui/internal/layout"
 )
 
 // Settings persist across TUI sessions in ~/.config/mullet-sitl/settings.json.

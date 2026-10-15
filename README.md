@@ -28,9 +28,9 @@ MULLET launches a multi-vehicle [PX4](https://px4.io/) SITL + Gazebo (GZ) fleet 
 - Networking is `network_mode: host` (Linux). QGroundControl auto-connects on localhost — nothing is published as forwarded UDP ports.
 - `./run.sh --headless` runs the same fleet with no GUI and no tmux, starts `mullet_core` for every drone and returns once they all publish heartbeats: the live backend for [mullet-paddock](#headless--live-mock) and for scripted end-to-end tests.
 
-PX4 image (public): `ghcr.io/skymule-ai/px4-sitl:v1.17.0` — ROS 2 Jazzy, PX4 1.17 (the drones' Pixhawks run 1.17.x; `px4_msgs` follows `release/1.17`).
+PX4 image (public): `ghcr.io/skymule-ai/px4-sitl:v1.17.0`, built from [`image/`](image/) — ROS 2 Jazzy, PX4 1.17 (the drones' Pixhawks run 1.17.x; `px4_msgs` follows `release/1.17`).
 
-ROS packages `mullet-core` and `mullet-interfaces` are **private SkyMule submodules**. You can still run PX4 + Gazebo + XRCE without them.
+ROS packages `mullet-core` and `mullet-interfaces` are SkyMule submodules, cloned over SSH. You can still run PX4 + Gazebo + XRCE without them.
 
 ## Contents
 
@@ -52,13 +52,13 @@ ROS packages `mullet-core` and `mullet-interfaces` are **private SkyMule submodu
 | [Docker Engine](https://docs.docker.com/engine/install/) + Compose plugin | X11 (`xhost`) for Gazebo GUI |
 | `tmux` ≥ 3.4 (clickable TUI tabs) | Go 1.25, or Docker, to build the TUI |
 | `python3` (stdlib only on the host) | QGroundControl (`QGC_PATH` in `.env`) |
-| `git` | SkyMule org SSH (private ROS submodules) |
+| `git` | GitHub SSH key (ROS submodules use SSH URLs) |
 
 ## Install
 
 ```sh
-git clone https://github.com/skymule-ai/mullet_sitl_sim.git
-cd mullet_sitl_sim
+git clone https://github.com/skymule-ai/mullet-sim.git
+cd mullet-sim
 chmod +x setup.sh run.sh stop.sh
 ./setup.sh
 ```
@@ -67,9 +67,9 @@ chmod +x setup.sh run.sh stop.sh
 
 Set `DISPLAY` in `.env` to your X11 display (`echo $DISPLAY`). If you use QGroundControl, set `QGC_PATH`.
 
-### Without org access
+### Without a GitHub SSH key
 
-Submodule init will fail. PX4 + Gazebo still work. Use a session like:
+Without an SSH key, submodule init fails. PX4 + Gazebo still work. Use a session like:
 
 ```yaml
 session:
@@ -77,7 +77,7 @@ session:
   windows: [px4, xrce, code]
 ```
 
-`core` panes and the heartbeat dashboard need the private submodules and `colcon build`.
+`core` panes and the heartbeat dashboard need the submodules and `colcon build`.
 
 ### Manual steps (same as setup.sh)
 

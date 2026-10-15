@@ -1,5 +1,5 @@
 {
-  "name": "mullet_sitl_sim",
+  "name": "mullet-sim",
   "dockerComposeFile": "./docker-compose.yml",
   "service": "dev",
   "workspaceFolder": "/ws",

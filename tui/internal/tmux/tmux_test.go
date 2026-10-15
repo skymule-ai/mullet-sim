@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/layout"
-	"github.com/skymule-ai/mullet_sitl_sim/tui/internal/theme"
+	"github.com/skymule-ai/mullet-sim/tui/internal/layout"
+	"github.com/skymule-ai/mullet-sim/tui/internal/theme"
 )
 
 func TestNextCodeNum(t *testing.T) {
