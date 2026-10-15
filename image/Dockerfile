@@ -151,6 +151,7 @@ RUN --mount=type=cache,target=/ccache,sharing=locked \
 # 3) Runtime stage
 # -------------------------
 FROM px4_deps AS runtime
+LABEL org.opencontainers.image.source="https://github.com/skymule-ai/mullet-sim"
 ARG USERNAME
 ARG USER_UID
 ARG USER_GID
